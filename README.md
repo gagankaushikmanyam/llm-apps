@@ -1,8 +1,6 @@
 
 
 ---
-
-```markdown
 # 🧪 LLM Lab
 
 **LLM Lab** is a modular, Streamlit-based experimentation environment for exploring core  
