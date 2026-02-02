@@ -39,7 +39,7 @@ This design enables seamless extension of the lab by adding new application file
 
 Included Application
 
-App 1: Hugging Face Fine-tuning Demo
+App: Hugging Face Fine-tuning Demo
 
 File: applications/finetuning.py
 
