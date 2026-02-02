@@ -18,7 +18,7 @@ import importlib
 import pkgutil
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import streamlit as st
 
@@ -54,9 +54,6 @@ def _discover_apps(package_name: str = "applications") -> List[DiscoveredApp]:
 
     for modinfo in pkgutil.iter_modules(package.__path__, package.__name__ + "."):
         module_name = modinfo.name
-        if module_name.endswith(".__init__"):
-            continue
-
         short_key = module_name.split(".")[-1]
         if short_key == "__init__":
             continue
@@ -85,21 +82,17 @@ def _discover_apps(package_name: str = "applications") -> List[DiscoveredApp]:
                 DiscoveredApp(
                     key=short_key,
                     name=app_name,
-                    description=app_desc.strip(),
+                    description=str(app_desc).strip(),
                     module=mod,
                 )
             )
 
-    # Sort by human-friendly app name
     apps.sort(key=lambda a: a.name.lower())
     return apps
 
 
 def _make_error_module(module_name: str, exc: Exception) -> ModuleType:
-    """
-    Create a tiny module-like object with a run() function that displays an error.
-    This avoids breaking the whole launcher if one app fails to import.
-    """
+    """Create a tiny module-like object with a run() function that displays an error."""
 
     class _ErrorModule:
         APP_NAME = f"{module_name} (error)"
@@ -182,22 +175,18 @@ def main() -> None:
         st.warning("No apps found. Add .py files to the applications/ folder.")
         st.stop()
 
-    # Sidebar: app selector
     st.sidebar.title("Apps")
     app_names = [a.name for a in apps]
     name_to_app: Dict[str, DiscoveredApp] = {a.name: a for a in apps}
 
-    default_name: str = app_names[0]
     selected_name: str = st.sidebar.radio(
         "Select an app",
         options=app_names,
-        index=app_names.index(default_name),
+        index=0,
         label_visibility="collapsed",
     )
 
     selected_app = name_to_app[selected_name]
-
-    # Main area: app header + app UI
     _render_app_info(selected_app)
 
     try:

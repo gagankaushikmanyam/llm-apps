@@ -1,199 +1,110 @@
 
 ⸻
 
-
 # LLM Lab 🧪
 
-LLM Lab is a modular, Streamlit-based experimentation environment for exploring and demonstrating core **Large Language Model (LLM) techniques**, starting with **supervised fine-tuning** and designed to scale toward LoRA, QLoRA, RAG, and agent-based systems.
+LLM Lab is a modular, Streamlit-based experimentation environment for exploring core **Large Language Model (LLM) techniques**, starting with **supervised fine-tuning** and extending toward hallucination mitigation, LoRA/QLoRA, RAG, and agent-style systems.
 
-The repository prioritizes:
-- clarity of implementation
-- reproducibility
-- CPU-friendly experimentation
-- clean extensibility through a plugin-style app architecture
+The repository emphasizes:
+- clear, inspectable implementations
+- CPU-friendly demos with optional GPU acceleration
+- reproducibility (seed control)
+- a plugin-style architecture for adding new apps
 
 ---
 
 ## Architecture Overview
 
-The project is structured around a **single Streamlit launcher** (`app.py`) that dynamically discovers and loads LLM mini-applications from the `applications/` directory.
+The project is structured around a single Streamlit launcher (`app.py`) that dynamically discovers and loads applications from the `applications/` directory.
 
-### Application discovery
-- `app.py` scans all Python files in `applications/`
-- Each file represents an independent LLM experiment
-- No manual registration is required
-
-Each application must expose the following interface:
+Each application must expose:
 
 ```python
-APP_NAME = "Human-readable application name"
+APP_NAME = "Human-readable name"
+APP_DESCRIPTION = "Optional description"
 
 def run() -> None:
     ...
 
-Discovered applications are rendered automatically in the Streamlit sidebar, and their UI is displayed in the main panel upon selection.
-
-This design enables seamless extension of the lab by adding new application files without modifying core infrastructure.
+New experiments are added by dropping a new file into applications/—no core launcher modifications are required.
 
 ⸻
 
-Included Application
-
-App: Hugging Face Fine-tuning Demo
+App 1: Hugging Face Fine-tuning Demo
 
 File: applications/finetuning.py
 
-This application demonstrates end-to-end supervised fine-tuning of a causal language model using the Hugging Face Transformers ecosystem, with a clear comparison between pretrained and fine-tuned model behavior.
+This app demonstrates end-to-end supervised fine-tuning of a causal language model using the Hugging Face Transformers ecosystem, with a direct comparison between pretrained and fine-tuned behavior.
 
-⸻
+Task
 
-Background: What is Fine-tuning?
-
-Pretrained language models (e.g., GPT-2) are trained on large, general-purpose corpora.
-They exhibit strong linguistic competence but lack specialization for specific downstream tasks.
-
-Fine-tuning refers to continuing training on a smaller, task-specific dataset in order to adapt the model’s internal weights to a particular domain or output style.
-
-Key characteristics:
-	•	updates model parameters (weights)
-	•	differs fundamentally from prompt engineering
-	•	enables task specialization with limited data
-
-⸻
-
-Fine-tuning in This Repository (Toy Example)
-
-Task Definition
-
-The fine-tuning task implemented here is logistics email subject line generation.
-
-Given a short instruction describing an operational scenario, the model is trained to generate a concise, professional email subject line.
-
-Example input
-
-Write an email subject for a shipment delayed due to weather.
-Mention the new ETA is tomorrow.
-
-Expected output
-
-Weather Delay: Updated ETA for Shipment (Arrives Tomorrow)
-
-
-⸻
-
-Implementation Details
+Logistics email subject line generation from short instructions.
 
 Data
-	•	Dataset is defined in utils/io.py
-	•	Each training example consists of:
-	•	instruction: textual description of the scenario
-	•	subject: target email subject line
-	•	The dataset is intentionally small to ensure:
-	•	fast execution on CPU
-	•	clear visibility of training effects
 
-This dataset is designed for demonstration and learning, not for production-grade performance.
-
-⸻
+A small in-repo toy dataset defined in utils/io.py (instruction → subject).
 
 Model
-	•	Default model: sshleifer/tiny-gpt2
-	•	extremely lightweight
-	•	CPU-friendly
-	•	suitable for rapid experimentation
-	•	Optional alternative: distilgpt2
-	•	higher capacity
-	•	improved output quality
-	•	slower on CPU
+	•	Default: sshleifer/tiny-gpt2 (CPU-friendly)
+	•	Optional: distilgpt2 (higher quality, slower on CPU)
 
-Models are loaded via Hugging Face Transformers.
-
-⸻
-
-Training Procedure
-	1.	Each example is formatted as a single causal language modeling sequence:
-
-Instruction: <instruction text>
-Subject: <subject text>
-
-	2.	Text is tokenized and converted into model inputs
-	3.	Labels are set equal to input IDs (standard causal LM objective)
-	4.	Training is performed using Hugging Face’s Trainer API
-	5.	Training runs for a small number of epochs to avoid overfitting
-	6.	The fine-tuned model and tokenizer are saved locally under:
-
+Training + Evaluation
+	•	Examples are formatted as:
+Instruction: ...\nSubject: ...
+	•	Tokenization and training use the standard causal LM objective (labels = input_ids)
+	•	Training runs via Hugging Face Trainer
+	•	Loss per epoch is displayed
+	•	Fine-tuned artifacts are saved under:
 artifacts/finetuning/<timestamp>/
 
+Expected outcome
+	•	“After” output becomes more task-aligned than “Before”
+	•	With very small datasets, excessive epochs can cause repetition (overfitting),
+mitigated via decoding constraints (greedy/beam + repetition controls)
 
 ⸻
 
-Evaluation and Comparison
+App 2: Hallucinations Lab (Prompting Techniques)
 
-The application performs side-by-side inference using the same instruction:
-	•	once with the base pretrained model
-	•	once with the fine-tuned model
+File: applications/hallucinations.py
 
-This direct comparison highlights how fine-tuning alters model behavior for the target task.
+This app demonstrates prompt-level techniques to reduce hallucinations by improving output controllability and encouraging uncertainty. These approaches do not guarantee factual correctness without grounding (retrieval, citations, tools), but they are useful building blocks.
 
-Training loss per epoch is plotted to provide visibility into optimization dynamics.
+Techniques included
+	1.	Baseline (free-form): unconstrained responses can sound confident even when wrong
+	2.	JSON-only format: forces structured output and improves parseability
+	3.	JSON + refusal policy: permits explicit uncertainty via UNKNOWN + confidence
+	4.	Context-only answering: model must answer using provided context, else UNKNOWN
+	5.	Self-consistency voting: sample multiple JSON answers and pick the most frequent
 
-⸻
-
-Generation Strategy
-
-Because the dataset is intentionally small, the generation pipeline applies stabilizing constraints to reduce repetition and overfitting artifacts:
-	•	greedy or beam decoding (configurable)
-	•	repetition penalty
-	•	no-repeat n-gram constraints
-
-These choices prioritize interpretability and consistency over creative diversity.
+Expected outcome
+	•	JSON prompting tends to reduce rambling and makes outputs machine-checkable
+	•	Refusal policies reduce hallucinations when the model is uncertain
+	•	Context-only prompts emulate a minimal “grounded answering” rule
+	•	Self-consistency improves stability when single generations are noisy
 
 ⸻
 
-Expected Outcome
-
-After fine-tuning:
-	•	outputs become more structured and task-aligned
-	•	subject lines exhibit clearer logistics-oriented phrasing
-	•	differences between pretrained and fine-tuned behavior are immediately observable
-
-It is expected—and instructive—that excessive epochs on small datasets can lead to repetition, illustrating common fine-tuning failure modes.
-
-⸻
-
-Running the Application
+Running the Lab
 
 python -m venv llms-venv
 source llms-venv/bin/activate
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 
-Always use python -m streamlit to ensure the correct virtual environment is used.
+Always use python -m streamlit to ensure Streamlit runs inside the correct environment.
 
 ⸻
 
-Extensibility
+Extending the Lab
 
-The repository is designed to grow incrementally.
+To add a new application:
+	1.	Create applications/<new_app>.py
+	2.	Define APP_NAME and run()
+	3.	Restart Streamlit
 
-New experiments (e.g., LoRA, QLoRA, RAG, MCP tools) can be added by:
-	1.	creating a new file in applications/
-	2.	defining APP_NAME and run()
-	3.	restarting the Streamlit app
-
-No changes to the launcher are required.
-
-⸻
-
-Scope and Intent
-
-LLM Lab is focused on mechanistic understanding and experimentation, not on maximizing text quality.
-
-The goal is to provide a clean, inspectable foundation for:
-	•	understanding how fine-tuning works in practice
-	•	observing common training behaviors and failure modes
-	•	extending toward more advanced LLM adaptation techniques
-
-This foundation makes subsequent work on parameter-efficient fine-tuning, retrieval augmentation, and agent systems significantly easier to reason about.
-
----
+Suggested next apps:
+	•	applications/lora.py
+	•	applications/qlora.py
+	•	applications/rag.py
+	•	applications/mcp.py
