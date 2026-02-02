@@ -1,0 +1,17 @@
+# Virtual environments
+llms-venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Streamlit cache
+.streamlit/
+
+# Training artifacts
+artifacts/
+output/
+
+# OS
+.DS_Store
