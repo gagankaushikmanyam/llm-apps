@@ -25,6 +25,7 @@ APP_DESCRIPTION = "Optional description"
 
 def run() -> None:
     ...
+```
 
 New experiments are added by dropping a new file into applications/—no core launcher modifications are required.
 
