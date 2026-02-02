@@ -30,7 +30,7 @@ New experiments are added by dropping a new file into applications/—no core la
 
 ⸻
 
-App 1: Hugging Face Fine-tuning Demo
+App: Hugging Face Fine-tuning Demo
 
 File: applications/finetuning.py
 
@@ -64,24 +64,209 @@ mitigated via decoding constraints (greedy/beam + repetition controls)
 
 ⸻
 
-App 2: Hallucinations Lab (Prompting Techniques)
+App: Hallucinations Lab — Prompting + RAG-lite Grounding
 
 File: applications/hallucinations.py
 
-This app demonstrates prompt-level techniques to reduce hallucinations by improving output controllability and encouraging uncertainty. These approaches do not guarantee factual correctness without grounding (retrieval, citations, tools), but they are useful building blocks.
+This app demonstrates why hallucinations happen, why prompting alone is insufficient, and how grounding with retrieved context (RAG-lite) is the only reliable way to reduce hallucinations in practice.
 
-Techniques included
-	1.	Baseline (free-form): unconstrained responses can sound confident even when wrong
-	2.	JSON-only format: forces structured output and improves parseability
-	3.	JSON + refusal policy: permits explicit uncertainty via UNKNOWN + confidence
-	4.	Context-only answering: model must answer using provided context, else UNKNOWN
-	5.	Self-consistency voting: sample multiple JSON answers and pick the most frequent
+The goal is not to make a small model “know facts”, but to show how systems enforce correctness even when the model is unreliable.
 
-Expected outcome
-	•	JSON prompting tends to reduce rambling and makes outputs machine-checkable
-	•	Refusal policies reduce hallucinations when the model is uncertain
-	•	Context-only prompts emulate a minimal “grounded answering” rule
-	•	Self-consistency improves stability when single generations are noisy
+⸻
+
+Why Hallucinations Happen (Baseline)
+
+Large Language Models are probabilistic text generators, not truth engines.
+
+When you ask a factual question without constraints, the model will:
+	•	Produce a fluent answer
+	•	Sound confident
+	•	Hallucinate if it does not know
+
+Baseline Mode (Free-form)
+
+Technique:
+	•	No structure
+	•	No refusal
+	•	No grounding
+
+Expected behavior:
+	•	The model always answers
+	•	Often confidently wrong
+	•	No way to verify correctness
+
+How to test it:
+	1.	Select Technique → Baseline (free-form)
+	2.	Ask a nonsense or unknown question:
+	•	“What year did Isaac Newton invent the smartphone?”
+	3.	Observe:
+	•	The model gives a confident but fabricated answer
+
+This demonstrates the default hallucination behavior of LLMs.
+
+⸻
+
+Why Prompting Alone Is Not Enough
+
+JSON-only / Refusal / Self-consistency Modes
+
+These techniques improve output control, not truth.
+
+They help with:
+	•	Structured outputs
+	•	Safer responses (UNKNOWN)
+	•	Stability across multiple generations
+
+They do not guarantee correctness unless the model already knows the answer.
+
+How to test:
+	•	Use JSON-only or JSON + refusal
+	•	Ask factual questions the model may or may not know
+	•	You may still get:
+	•	Wrong answers
+	•	Or inconsistent answers across runs
+
+This shows:
+
+Prompting reduces chaos, not hallucinations.
+
+⸻
+
+Context-Only Answering (Grounded Mode)
+
+This is the core hallucination solution demonstrated in this app.
+
+What “Context-Only” Actually Means
+	•	The model is forbidden from using its internal knowledge
+	•	It may only answer using retrieved text
+	•	If the answer is not supported → it must return UNKNOWN
+
+This is a RAG-lite system.
+
+⸻
+
+Knowledge Base (Local, Explicit, Transparent)
+
+You must create a local knowledge base manually.
+
+Folder structure:
+
+knowledge_base/
+  australia.txt
+  logistics_faq.txt
+  ...
+
+Example (australia.txt):
+
+Australia's national government is based in Canberra, home to Parliament House.
+Sydney is the largest city by population.
+
+There is no hidden dataset and no magic.
+
+This is intentional:
+	•	You control the knowledge
+	•	You can inspect exactly what the model sees
+	•	You can test failure cases honestly
+
+⸻
+
+How Retrieval Works (RAG-lite)
+	1.	Documents are split into chunks
+	2.	TF-IDF (scikit-learn) ranks chunks by similarity to the question
+	3.	Top-K chunks are retrieved
+	4.	The model is only allowed to answer using those chunks
+
+This is why scikit-learn is installed:
+	•	It powers local retrieval
+	•	No embeddings, no vector DB, no cloud
+	•	Simple, transparent, CPU-friendly
+
+⸻
+
+How to Test Context-Only Correctness
+
+Correct Answer Case
+	1.	Technique → Context-only (RAG-lite grounded)
+	2.	Question:
+
+What is the capital of Australia?
+
+
+	3.	Ensure australia.txt contains the answer
+	4.	Expected output:
+	•	answer: Canberra
+	•	supported_by_context: true
+	•	Evidence quoted from the document
+
+Forced UNKNOWN Case
+	1.	Ask:
+
+Who is the president of Australia?
+
+
+	2.	If the answer is not in the documents
+	3.	Expected output:
+	•	answer: UNKNOWN
+	•	supported_by_context: false
+
+This verifies that hallucination is blocked, not hidden.
+
+⸻
+
+Why Context-Only May Feel “Obvious”
+
+You may notice:
+
+“We already put the answer in the context.”
+
+That is the entire point.
+
+In real systems:
+	•	Context comes from databases
+	•	Documents
+	•	APIs
+	•	Logs
+	•	Contracts
+	•	Internal knowledge bases
+
+The model’s job is not to invent, but to:
+	•	Read
+	•	Extract
+	•	Cite
+	•	Refuse when unsupported
+
+This app demonstrates that principle clearly.
+
+⸻
+
+Summary: What Each Mode Teaches You
+
+Mode	What it demonstrates
+Baseline	Confident hallucinations
+JSON-only	Structured but not factual
+Refusal	Safer uncertainty
+Self-consistency	Stability, not truth
+Context-only (RAG-lite)	Actual hallucination prevention
+
+
+⸻
+
+Key Takeaway
+
+Hallucinations are not a “model bug”.
+They are a system design problem.
+
+This app shows that:
+	•	Prompting helps formatting
+	•	Retrieval provides truth
+	•	Grounding enforces correctness
+
+Once this is clear, extending to:
+	•	Full RAG
+	•	Vector databases
+	•	Citations
+	•	Tools & agents
+becomes straightforward.
 
 ⸻
 
