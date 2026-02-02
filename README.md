@@ -1,134 +1,167 @@
+
 ⸻
 
 
 # LLM Lab 🧪
 
-A lightweight, scalable **Streamlit-based playground** for experimenting with Large Language Model (LLM) techniques such as **fine-tuning**, with a structure that allows adding more apps (LoRA, QLoRA, RAG, MCP) later.
+LLM Lab is a modular, Streamlit-based experimentation environment for exploring and demonstrating core **Large Language Model (LLM) techniques**, starting with **supervised fine-tuning** and designed to scale toward LoRA, QLoRA, RAG, and agent-based systems.
+
+The repository prioritizes:
+- clarity of implementation
+- reproducibility
+- CPU-friendly experimentation
+- clean extensibility through a plugin-style app architecture
 
 ---
 
-## Streamlit App Overview
+## Architecture Overview
 
-This repository runs a **single Streamlit launcher (`app.py`)** that automatically discovers and loads mini-apps from the `applications/` folder.
+The project is structured around a **single Streamlit launcher** (`app.py`) that dynamically discovers and loads LLM mini-applications from the `applications/` directory.
 
-### How it works
-- `app.py` scans `applications/*.py`
-- Each app must define:
-  ```python
-  APP_NAME = "Readable App Name"
+### Application discovery
+- `app.py` scans all Python files in `applications/`
+- Each file represents an independent LLM experiment
+- No manual registration is required
 
-  def run() -> None:
-      ...
+Each application must expose the following interface:
 
-	•	Every discovered app appears automatically in the left sidebar
-	•	Selecting an app renders its UI in the main panel
+```python
+APP_NAME = "Human-readable application name"
 
-This design allows you to add new LLM experiments by simply adding a new file to applications/ — no changes to the launcher are required.
+def run() -> None:
+    ...
+
+Discovered applications are rendered automatically in the Streamlit sidebar, and their UI is displayed in the main panel upon selection.
+
+This design enables seamless extension of the lab by adding new application files without modifying core infrastructure.
 
 ⸻
 
-App Included: Hugging Face Fine-tuning Demo
+Included Application
+
+App 1: Hugging Face Fine-tuning Demo
 
 File: applications/finetuning.py
-Goal: Demonstrate before vs after behavior when fine-tuning a language model on a small, task-specific dataset.
 
-The app shows:
-	•	Model output before fine-tuning
-	•	Model output after fine-tuning
-	•	Training loss per epoch
-	•	Saved fine-tuned model artifacts
+This application demonstrates end-to-end supervised fine-tuning of a causal language model using the Hugging Face Transformers ecosystem, with a clear comparison between pretrained and fine-tuned model behavior.
 
 ⸻
 
-What is Fine-tuning?
+Background: What is Fine-tuning?
 
-Pretrained language models (like GPT-2) are trained on large, general datasets.
-They understand language broadly, but they are not specialized for your exact task.
+Pretrained language models (e.g., GPT-2) are trained on large, general-purpose corpora.
+They exhibit strong linguistic competence but lack specialization for specific downstream tasks.
 
-Fine-tuning means:
+Fine-tuning refers to continuing training on a smaller, task-specific dataset in order to adapt the model’s internal weights to a particular domain or output style.
 
-Continuing training on a small, task-specific dataset so the model adapts its behavior.
-
-Fine-tuning changes the model’s weights, unlike prompt engineering, which only changes the input text.
+Key characteristics:
+	•	updates model parameters (weights)
+	•	differs fundamentally from prompt engineering
+	•	enables task specialization with limited data
 
 ⸻
 
-How Fine-tuning is done in this repo (Toy Example)
+Fine-tuning in This Repository (Toy Example)
 
-Task
+Task Definition
 
-Generate logistics email subject lines from short instructions.
+The fine-tuning task implemented here is logistics email subject line generation.
+
+Given a short instruction describing an operational scenario, the model is trained to generate a concise, professional email subject line.
 
 Example input
 
 Write an email subject for a shipment delayed due to weather.
 Mention the new ETA is tomorrow.
 
-Target output
+Expected output
 
 Weather Delay: Updated ETA for Shipment (Arrives Tomorrow)
 
 
 ⸻
 
-Dataset
-	•	The dataset is defined in utils/io.py
-	•	Each example contains:
-	•	instruction – what the email is about
-	•	subject – the correct subject line
-	•	The dataset is intentionally very small so training runs quickly on CPU
+Implementation Details
 
-This is a learning/demo dataset, not a production one.
+Data
+	•	Dataset is defined in utils/io.py
+	•	Each training example consists of:
+	•	instruction: textual description of the scenario
+	•	subject: target email subject line
+	•	The dataset is intentionally small to ensure:
+	•	fast execution on CPU
+	•	clear visibility of training effects
+
+This dataset is designed for demonstration and learning, not for production-grade performance.
 
 ⸻
 
 Model
 	•	Default model: sshleifer/tiny-gpt2
-	•	Very small
+	•	extremely lightweight
 	•	CPU-friendly
-	•	Chosen to make fine-tuning fast and visible
-	•	Optional upgrade: distilgpt2
-	•	Better quality
-	•	Slower on CPU
+	•	suitable for rapid experimentation
+	•	Optional alternative: distilgpt2
+	•	higher capacity
+	•	improved output quality
+	•	slower on CPU
 
-Models are loaded from Hugging Face Transformers.
+Models are loaded via Hugging Face Transformers.
 
 ⸻
 
-Training process (simplified)
-	1.	Each example is formatted as:
+Training Procedure
+	1.	Each example is formatted as a single causal language modeling sequence:
 
-Instruction: <instruction>
-Subject: <subject>
+Instruction: <instruction text>
+Subject: <subject text>
 
-
-	2.	Text is tokenized into model inputs
-	3.	The model is trained using Hugging Face’s Trainer API
-	4.	Training runs for a small number of epochs
-	5.	The fine-tuned model is saved locally under:
+	2.	Text is tokenized and converted into model inputs
+	3.	Labels are set equal to input IDs (standard causal LM objective)
+	4.	Training is performed using Hugging Face’s Trainer API
+	5.	Training runs for a small number of epochs to avoid overfitting
+	6.	The fine-tuned model and tokenizer are saved locally under:
 
 artifacts/finetuning/<timestamp>/
 
 
+⸻
+
+Evaluation and Comparison
+
+The application performs side-by-side inference using the same instruction:
+	•	once with the base pretrained model
+	•	once with the fine-tuned model
+
+This direct comparison highlights how fine-tuning alters model behavior for the target task.
+
+Training loss per epoch is plotted to provide visibility into optimization dynamics.
 
 ⸻
 
-Generation (Before vs After)
+Generation Strategy
 
-The same instruction is run:
-	•	Once with the base pretrained model
-	•	Once with the fine-tuned model
+Because the dataset is intentionally small, the generation pipeline applies stabilizing constraints to reduce repetition and overfitting artifacts:
+	•	greedy or beam decoding (configurable)
+	•	repetition penalty
+	•	no-repeat n-gram constraints
 
-This makes it easy to see how fine-tuning changes model behavior.
-
-To reduce repetition caused by tiny datasets, generation uses:
-	•	Greedy or beam decoding
-	•	Repetition penalties
-	•	No-repeat n-gram constraints
+These choices prioritize interpretability and consistency over creative diversity.
 
 ⸻
 
-Running the App
+Expected Outcome
+
+After fine-tuning:
+	•	outputs become more structured and task-aligned
+	•	subject lines exhibit clearer logistics-oriented phrasing
+	•	differences between pretrained and fine-tuned behavior are immediately observable
+
+It is expected—and instructive—that excessive epochs on small datasets can lead to repetition, illustrating common fine-tuning failure modes.
+
+⸻
+
+Running the Application
 
 python -m venv llms-venv
 source llms-venv/bin/activate
@@ -139,22 +172,28 @@ Always use python -m streamlit to ensure the correct virtual environment is used
 
 ⸻
 
-Extending the Lab
+Extensibility
 
-To add a new experiment:
-	1.	Create a new file in applications/
-	2.	Define APP_NAME and run()
-	3.	Restart Streamlit
+The repository is designed to grow incrementally.
 
-The README can be extended by adding short sections for new apps as they are added.
+New experiments (e.g., LoRA, QLoRA, RAG, MCP tools) can be added by:
+	1.	creating a new file in applications/
+	2.	defining APP_NAME and run()
+	3.	restarting the Streamlit app
+
+No changes to the launcher are required.
 
 ⸻
 
-Purpose of this Repo
+Scope and Intent
 
-This project focuses on understanding the mechanics of LLM fine-tuning and experimentation — not on producing perfect text.
+LLM Lab is focused on mechanistic understanding and experimentation, not on maximizing text quality.
 
-Once these fundamentals are clear, extending to LoRA, QLoRA, RAG, or agent systems becomes straightforward.
+The goal is to provide a clean, inspectable foundation for:
+	•	understanding how fine-tuning works in practice
+	•	observing common training behaviors and failure modes
+	•	extending toward more advanced LLM adaptation techniques
+
+This foundation makes subsequent work on parameter-efficient fine-tuning, retrieval augmentation, and agent systems significantly easier to reason about.
 
 ---
-
