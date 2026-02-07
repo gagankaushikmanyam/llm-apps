@@ -18,6 +18,7 @@ It explores:
 • prompt caching and latency optimization  
 
 All examples are:
+
 • CPU-friendly  
 • fully inspectable  
 • explicit about failure modes  
