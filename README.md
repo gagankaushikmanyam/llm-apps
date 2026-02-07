@@ -4,21 +4,22 @@ Author: Gagan Kaushik Manyam
 # 🧪 LLM Lab — A Systems-First Playground for Modern LLM Engineering
 
 **LLM Lab** is a modular, Streamlit-based experimentation environment for learning and demonstrating  
-**how real-world LLM systems are designed, debugged, and extended** — beyond prompts and demos.
+**how real-world LLM systems are designed, debugged, and extended** — beyond prompt demos and surface-level examples.
 
 This repository focuses on **system behavior**, not model hype.
 
-It covers:
-- supervised fine-tuning  
-- hallucination mitigation  
-- RAG-lite grounding  
-- multi-step orchestration  
-- tool-based (MCP-style) execution  
+It explores:
+• supervised fine-tuning  
+• hallucination mitigation  
+• retrieval-grounded generation (RAG-lite)  
+• multi-step orchestration  
+• tool-based (MCP-style) execution  
+• prompt caching and latency optimization  
 
 All examples are:
-- **CPU-friendly**
-- **fully inspectable**
-- **explicit about failure modes**
+• CPU-friendly  
+• fully inspectable  
+• explicit about failure modes  
 
 This is a **learning + research lab**, not a production framework.
 
@@ -26,302 +27,215 @@ This is a **learning + research lab**, not a production framework.
 
 ## 👤 Who This Repository Is For
 
-This repo is designed for:
+This repository is designed for:
 
-- **Aspiring AI / LLM Engineers** entering industry roles  
-- **Software / ML Engineers** transitioning into LLM systems  
-- **Researchers** who want to understand *why* LLMs fail or succeed  
-- **Recruiters & hiring managers** evaluating practical system design skills  
+• Aspiring **AI / LLM Engineers** entering industry roles  
+• Software / ML engineers transitioning into **LLM systems**  
+• Researchers who want to understand *why* LLMs fail or succeed  
+• Recruiters and hiring managers evaluating **system-level thinking**
 
 If you want to understand:
-- why hallucinations happen  
-- why prompting is not enough  
-- how orchestration actually works  
-- how tools change LLM behavior  
+• why hallucinations happen  
+• why prompting is not enough  
+• how orchestration actually works  
+• how tools and caching change LLM behavior  
 
-this repo is for you.
+this repository is for you.
 
 ---
 
 ## ✨ Design Principles
 
-- 🔍 **Inspectability over magic**
-- 🧠 **Concept-first demos** (why things work or fail)
-- 💻 **CPU-first**, GPU optional
-- 🎯 **Reproducibility** (explicit seeds)
-- 🧩 **Plugin-style architecture**
-- 🚫 No hidden datasets, no black boxes
+• Inspectability over magic  
+• Concept-first demos (why things work or fail)  
+• CPU-first, GPU optional  
+• Reproducibility via explicit seeds  
+• Plugin-style architecture  
+• No hidden datasets, no black boxes  
 
 ---
 
 ## 🏗 Architecture Overview
 
-The lab is structured around a **single Streamlit launcher**:
+The lab is built around a **single Streamlit launcher**.
 
-```
-app.py
-```
+Core entry point:
+• app.py  
 
 Applications are auto-discovered from:
+• applications/  
 
-```
-applications/
-```
+### 🔌 Application Interface Contract
 
-### 🔌 Application Contract
+Each application must expose:
 
-Every app must expose:
+APP_NAME — Human-readable title  
+APP_DESCRIPTION — Optional description  
+run() — Streamlit entrypoint  
 
-```python
-APP_NAME = "Human-readable name"
-APP_DESCRIPTION = "Optional description"
+Adding a new app:
+• Drop a file into applications/  
+• Restart Streamlit  
+• No launcher changes required  
 
-def run() -> None:
-    ...
-```
-
-- Drop a new file into `applications/`
-- Restart Streamlit
-- No launcher changes required
-
-This keeps the system **scalable and clean**.
+This keeps the system clean, scalable, and extensible.
 
 ---
 
-# 🧠 App 1 — Hugging Face Fine-tuning (Supervised)
+## 🧠 Application Overview
 
-**File:** `applications/finetuning.py`
+### App 1 — Hugging Face Fine-Tuning (Supervised)
 
-Demonstrates **end-to-end supervised fine-tuning** of a causal language model using  
-**Hugging Face Transformers**.
+File: applications/finetuning.py  
 
----
+Demonstrates **end-to-end supervised fine-tuning** of a causal language model using Hugging Face Transformers.
 
-## 🎯 Task
+What this app shows:
+• True before-vs-after comparison  
+• Validation loss with early stopping  
+• Holdout benchmark not seen during training  
+• Simple evaluation metrics  
+  – Exact Match  
+  – Token-level F1  
+• Saved training artifacts  
 
-Logistics email subject line generation from short instructions.
+Artifacts location:
+• artifacts/finetuning/<timestamp>/  
 
-Example:
+Models:
+• sshleifer/tiny-gpt2 — ultra-fast, educational  
+• distilgpt2 — higher quality, still CPU-friendly  
 
-```
-Instruction: Write an email subject for a shipment delayed due to weather.
-Subject: Weather Delay: Updated ETA for Shipment (Arrives Tomorrow)
-```
+Important note:
+• This app performs **full fine-tuning**
+• LoRA / QLoRA are planned extensions  
 
----
-
-## 📊 What This App Shows
-
-- True **before vs after** comparison  
-- Validation loss + early stopping  
-- Holdout benchmark (not seen during training)  
-- Simple metrics:
-  - Exact Match
-  - Token-level F1  
-- Saved artifacts:
-  ```
-  artifacts/finetuning/<timestamp>/
-  ```
+Key lesson:
+Fine-tuning improves task alignment, **not knowledge**, and overfits easily on small datasets.
 
 ---
 
-## 🤖 Models
+### App 2 — Hallucinations Lab (Prompting + RAG-lite)
 
-- `sshleifer/tiny-gpt2` — ultra-fast, educational  
-- `distilgpt2` — higher quality, still CPU-friendly  
+File: applications/hallucinations.py  
 
-⚠️ This app performs **full fine-tuning**, not LoRA / QLoRA  
-(LoRA/QLoRA are planned extensions.)
+Demonstrates **why hallucinations occur** and why **grounding with retrieved context** is the only reliable mitigation strategy.
 
----
+Baseline behavior:
+• No structure  
+• No refusal  
+• No grounding  
 
-## 🧠 Key Lesson
+Result:
+• Fluent answers  
+• Confident tone  
+• Fabricated facts  
 
-Fine-tuning:
-- improves **task alignment**
-- does **not** inject knowledge
-- overfits easily with small data
+Prompting techniques (JSON, refusal, self-consistency):
+• Improve formatting  
+• Improve stability  
+• Do NOT guarantee correctness  
 
-This app shows **what fine-tuning can and cannot do**.
-
----
-
-# 🧠 App 2 — Hallucinations Lab (Prompting + RAG-lite)
-
-**File:** `applications/hallucinations.py`
-
-Demonstrates **why hallucinations happen** and why  
-**grounding with context** is the only reliable mitigation.
-
----
-
-## 🔴 Baseline (Free-form)
-
-**Characteristics**
-- No structure  
-- No refusal  
-- No grounding  
-
-Ask:
-```
-What year did Isaac Newton invent the smartphone?
-```
-
-You will get:
-- fluent output  
-- confident tone  
-- fabricated content  
-
-This is **default LLM behavior**.
-
----
-
-## ⚠️ Why Prompting Alone Is Not Enough
-
-JSON-only, refusal, and self-consistency modes:
-- improve **format**
-- improve **stability**
-- do **not** guarantee truth
-
-**Key insight:**  
+Key insight:
 Prompting reduces chaos — **not hallucinations**.
 
----
+Context-only answering (RAG-lite):
+• Model may ONLY answer using retrieved context  
+• Must return UNKNOWN if unsupported  
 
-## 🟢 Context-Only Answering (RAG-lite)
+Knowledge base:
+• Local text files under knowledge_base/  
+• Fully explicit and inspectable  
 
-The model:
-- may **only** use retrieved context  
-- must say `UNKNOWN` if unsupported  
+Retrieval:
+• TF-IDF via scikit-learn  
+• Chunking + similarity ranking  
+• Top-K context injection  
 
-This is a **minimal RAG system**.
-
----
-
-## 📚 Knowledge Base (Explicit & Local)
-
-Directory structure:
-
-```
-knowledge_base/
-├── australia.txt
-├── logistics_faq.txt
-```
-
-Example (`australia.txt`):
-
-```
-Australia's national government is based in Canberra.
-Sydney is the largest city by population.
-```
-
-No hidden data. No magic.
-
----
-
-## 🔎 Retrieval (RAG-lite)
-
-- TF-IDF (scikit-learn)  
-- Chunking + similarity ranking  
-- Top-K chunks injected into the prompt  
-
-**Why scikit-learn?**
-- Transparent  
-- CPU-friendly  
-- No vector database required  
-
----
-
-## 🧠 Key Lesson
-
+Key lesson:
 Hallucinations are a **system design problem**, not a model bug.
 
 ---
 
-# 🧠 App 3 — LangChain Orchestration (Multi-Step Reasoning)
+### App 3 — LangChain Orchestration (Multi-Step Reasoning)
 
-**File:** `applications/langchain_orchestration.py`
+File: applications/langchain_orchestration.py  
 
 Demonstrates **explicit multi-step orchestration** using LangChain.
 
----
-
-## 🔁 Pipeline
-
+Pipeline stages:
 1. Classification  
 2. Clarifying questions  
-3. Checklist + required documents  
+3. Checklist and required documents  
 4. Optional email draft  
 
 Each step:
-- runs independently  
-- consumes prior outputs  
-- is visible in the UI  
+• Executes independently  
+• Consumes prior output  
+• Is visible in the UI  
+
+Key lesson:
+Orchestration enables control, traceability, and debuggability — mirroring real enterprise workflows.
 
 ---
 
-## 🧠 Key Lesson
+### App 4 — MCP Tools Lab (Tool-Based Systems)
 
-Orchestration provides:
-- control  
-- traceability  
-- debuggability  
+File: applications/mcp_tax_tools.py  
 
-This mirrors **real enterprise LLM workflows**.
+Demonstrates **tool-driven LLM systems** inspired by the Model Context Protocol (MCP).
 
----
-
-# 🧠 App 4 — MCP Tools Lab (Tool-Based Systems)
-
-**File:** `applications/mcp_tax_tools.py`
-
-Demonstrates **tool-based LLM systems** inspired by  
-the **Model Context Protocol (MCP)**.
-
----
-
-## 🧰 Tools Implemented
-
-1. `classify_tax_case`  
-2. `build_prep_checklist`  
-3. `draft_tax_email`  
+Tools implemented:
+• classify_tax_case  
+• build_prep_checklist  
+• draft_tax_email  
 
 Each tool is:
-- deterministic  
-- typed  
-- auditable  
+• Deterministic  
+• Typed  
+• Auditable  
+
+UI shows:
+• Live logs  
+• Progress indicators  
+• Intermediate tool calls  
+• Final composed output  
+
+Key lesson:
+Tools turn LLMs from text generators into **inspectable systems**.
 
 ---
 
-## 📊 UI Highlights
+### App 5 — Prompt Caching Lab (Latency Optimization)
 
-- Live logs  
-- Progress bar  
-- Each tool call (inputs + outputs)  
-- Final composed result  
+File: applications/prompt_caching.py  
 
----
+Demonstrates **prompt caching and KV-cache reuse** for performance optimization.
 
-## 🧠 Key Lesson
+What is measured:
+• Latency without caching (full recomputation)  
+• Latency with caching (shared prefix reused)  
 
-Tools turn LLMs from:
+UI displays:
+• Before vs after latency  
+• Per-query timings  
+• Average speed-up  
+• Output comparison  
 
-> *text generators*  
-
-into:
-
-> **inspectable systems**
+Key lesson:
+Prompt caching does not change correctness — it dramatically improves latency and scalability.
 
 ---
 
 ## 🧩 How Everything Fits Together
 
-| Application | What It Teaches |
-|------------|----------------|
-| Fine-tuning | Weight adaptation |
-| Hallucinations | Why grounding is required |
-| Orchestration | Structured reasoning |
-| MCP Tools | Controlled execution |
+| Component          | What It Teaches                         |
+|--------------------|------------------------------------------|
+| Fine-tuning        | Weight adaptation                        |
+| Hallucinations     | Why grounding is required                |
+| Orchestration      | Structured reasoning                    |
+| MCP Tools          | Controlled execution                    |
+| Prompt Caching     | Performance and latency optimization    |
 
 Together, these demonstrate **modern LLM system design**.
 
@@ -329,26 +243,31 @@ Together, these demonstrate **modern LLM system design**.
 
 ## ▶️ Running the Lab
 
-```bash
-python -m venv llms-venv
-source llms-venv/bin/activate
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
-```
+Steps:
+1. Create virtual environment  
+2. Install dependencies  
+3. Launch Streamlit  
 
-⚠️ Always use `python -m streamlit` to ensure the correct environment.
+Commands:
+
+python -m venv llms-venv  
+source llms-venv/bin/activate  
+python -m pip install -r requirements.txt  
+python -m streamlit run app.py  
+
+Always run Streamlit via python -m to ensure the correct environment.
 
 ---
 
 ## 🚀 Roadmap
 
 Planned additions:
-- LoRA / QLoRA fine-tuning  
-- Full RAG with embeddings  
-- LangGraph workflows  
-- MCP protocol integrations  
-- Multi-agent coordination  
-- ML & AI classics (decision trees, sparse regression, neural nets)  
+• LoRA / QLoRA fine-tuning  
+• Full RAG with embeddings  
+• LangGraph workflows  
+• MCP protocol integrations  
+• Multi-agent coordination  
+• ML & AI classics (trees, sparse regression, neural nets)  
 
 ---
 
@@ -357,13 +276,13 @@ Planned additions:
 This repository is not about making LLMs sound smart.
 
 It is about understanding:
-- why they fail  
-- how systems constrain them  
-- how engineers make them reliable  
+• why they fail  
+• how systems constrain them  
+• how engineers make them reliable  
 
-That is the difference between **demos** and **production**.
+That is the difference between **demos** and **production systems**.
 
 ---
 
-⭐ If this repo helped you learn something — **star it**.  
-💬 If you’re hiring — this repo reflects **how I think about AI systems**.
+⭐ If this repo helped you learn something — consider starring it.  
+💬 If you’re hiring — this repo reflects how I think about AI systems.
