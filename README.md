@@ -9,6 +9,7 @@ Author: Gagan Kaushik Manyam
 This repository focuses on **system behavior**, not model hype.
 
 It explores:
+
 • supervised fine-tuning  
 • hallucination mitigation  
 • retrieval-grounded generation (RAG-lite)  
