@@ -36,7 +36,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import streamlit as st
 
-APP_NAME = "MCP Tools Lab: FastMCP + Hugging Face (Taxes)"
+APP_NAME = "MCP (Tools): Model Context Protocol"
 APP_DESCRIPTION = "Demonstrates a 3-tool FastMCP-style workflow with clear logs, progress, and intermediate tool calls."
 
 

@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Tuple
 
 import streamlit as st
 
-APP_NAME = "LangChain Orchestration: Tax Workflow Assistant"
+APP_NAME = "LangChain Orchestration"
 APP_DESCRIPTION = (
     "Multi-step tax workflow using HF Transformers (FLAN-T5) with robust structured outputs. "
     "Classification → Questions → Checklist → Email. Uses key=value parsing (no fragile JSON)."

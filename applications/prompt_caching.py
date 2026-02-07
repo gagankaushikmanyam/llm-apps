@@ -30,7 +30,7 @@ from typing import Dict, List, Tuple
 
 import streamlit as st
 
-APP_NAME = "Prompt Caching Lab: Latency Before vs After"
+APP_NAME = "Prompt Caching"
 APP_DESCRIPTION = (
     "Measure latency speedups from KV-cache prompt caching: baseline (prefix+question each time) "
     "vs cached (prefix prefill once, reuse KV cache for multiple questions)."

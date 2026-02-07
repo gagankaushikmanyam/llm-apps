@@ -33,7 +33,7 @@ from utils.io import (
 )
 from utils.seed import set_seed
 
-APP_NAME = "HF Fine-tuning: Subject Line Generator"
+APP_NAME = "Fine Tuning"
 APP_DESCRIPTION = (
     "Fine-tune a small Hugging Face causal LM to generate logistics email subject lines. "
     "Shows BEFORE vs AFTER, eval loss curves, holdout benchmark, metrics, and saved artifacts."

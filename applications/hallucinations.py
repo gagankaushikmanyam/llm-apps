@@ -49,7 +49,7 @@ import streamlit as st
 
 from utils.seed import set_seed
 
-APP_NAME = "Hallucinations Lab: Prompting + RAG-lite"
+APP_NAME = "Hallucinations"
 APP_DESCRIPTION = (
     "RAG-lite (TF-IDF retrieval over local docs) + grounded answering, with JSON prompting, "
     "refusal policy, and self-consistency voting."
