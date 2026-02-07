@@ -73,7 +73,8 @@ APP_NAME = "Human-readable name"
 APP_DESCRIPTION = "Optional description"
 
 def run() -> None:
-    ...```
+    ...
+```
 
 ➡️ Drop a new file into applications/
 ➡️ Restart Streamlit
