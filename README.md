@@ -3,79 +3,233 @@ Author: Gagan Kaushik Manyam
 
 # 🧪 LLM Lab — A Systems-First Playground for Practical LLM Engineering
 
-**LLM Lab** is a modular, Streamlit-based environment to **learn, test, and debug real LLM system behaviors**—from fine-tuning and hallucination mitigation to orchestration, tool usage, and full Retrieval-Augmented Generation (RAG).
+**LLM Lab** is a modular, Streamlit-based experimentation environment for learning, testing, and **debugging real Large Language Model (LLM) systems**.
 
-This repo is **concept-first** and **system-first**:
-- It shows **why** outputs fail (hallucinations, weak retrieval, overfitting),
-- and **how** engineering patterns (grounding, orchestration, tools, re-ranking, strict outputs) make them reliable.
+This repository is **not about prompt tricks or flashy demos**.  
+It is about understanding **how LLM systems actually work in practice** — where they fail, why they hallucinate, and how engineers make them reliable.
 
-All demos are designed to be:
-- **CPU-friendly by default** (GPU optional),
-- **inspectable** (no hidden magic),
-- and **reproducible** (seed controls, deterministic knobs).
+The lab covers:
+- supervised fine-tuning
+- hallucination mitigation
+- RAG-lite and full RAG grounding
+- multi-step orchestration
+- tool-based (MCP-style) execution
+- prompt caching and latency behavior
 
-> This is a learning + research lab, not a production framework.
+All examples are:
+- CPU-friendly by default
+- fully inspectable
+- explicit about failure modes
+- reproducible (seeded)
+
+This is a **learning + research lab**, not a production framework.
 
 ---
 
 ## 👤 Who This Repository Is For
 
-This repository is built for:
-- **Aspiring AI / LLM Engineers** starting industry roles
-- **Software / ML Engineers** transitioning into LLM systems
-- **Researchers** who want clarity on *why systems fail/succeed*
-- **Recruiters / hiring managers** evaluating practical systems skills
+This repository is designed for:
+
+- Aspiring **AI / LLM Engineers** entering industry roles  
+- **Software / ML Engineers** transitioning into LLM systems  
+- **Researchers** who want to understand *why* LLMs fail or succeed  
+- **Recruiters & hiring managers** evaluating real system-design skills  
 
 If you want to understand:
-- why LLMs hallucinate,
-- why “prompting harder” isn’t enough,
-- how retrieval and citations enforce correctness,
-- how orchestration and tools create reliable pipelines,
+- why hallucinations happen,
+- why prompting alone is insufficient,
+- how retrieval enforces correctness,
+- how orchestration and tools create reliability,
 
-this repo is for you.
+this repository is for you.
 
 ---
 
 ## ✨ Design Principles
 
-- 🔍 **Inspectability over magic**
-- 🧠 **Concept-first demos** (failure modes are part of the learning)
-- 💻 **CPU-first**, GPU optional
-- 🎯 **Reproducibility** (explicit seeds + deterministic modes)
-- 🧩 **Plugin-style architecture** (drop-in apps)
-- 🚫 No hidden datasets, no black boxes
+- Inspectability over magic  
+- Concept-first demos (failure is part of learning)  
+- CPU-first, GPU optional  
+- Reproducibility via explicit seeds  
+- Plugin-style architecture  
+- No hidden datasets, no black boxes  
 
 ---
 
 ## 🏗 Architecture Overview
 
-The lab is driven by one Streamlit launcher:
+The lab is driven by a single Streamlit launcher:
 
-- **`app.py`** — discovers and loads all apps under **`applications/`**
+- `app.py`
 
-Every app must expose:
+Applications are automatically discovered from:
 
-- `APP_NAME` (required)
+- `applications/`
+
+### Application Contract
+
+Every application must expose:
+
+- `APP_NAME`
 - `APP_DESCRIPTION` (optional)
-- `run() -> None` (required)
+- `run() -> None`
 
-Add a new app by creating:
-
-- `applications/<new_app>.py`
-
-…and restarting Streamlit.
+To add a new app:
+1. Drop a file into `applications/`
+2. Restart Streamlit  
+3. No launcher changes required
 
 ---
 
-## 📌 Quick Summary of All Apps
+## 📌 Quick Summary of Applications
 
-| App | File | What it teaches | Primary “System Skill” |
-|---|---|---|---|
-| Fine-tuning | `applications/finetuning.py` | Adapting model weights to a task | Training + evaluation discipline |
-| Hallucinations Lab | `applications/hallucinations.py` | Why hallucinations happen + how to block them | Grounding + refusal + verification |
-| LangChain Orchestration | `applications/langchain_orchestration.py` | Multi-step pipelines with traceable steps | Orchestration + debuggability |
-| MCP Tax Tools | `applications/mcp_tax_tools.py` | Tool-based execution with logging | Deterministic, auditable actions |
-| Full RAG (Chroma) | `applications/full_rag_chroma.py` | Retrieval + re-ranking + strict citations | Retrieval quality + evidence-first answers |
+| App | File | What It Demonstrates |
+|---|---|---|
+| Fine-tuning | `finetuning.py` | Weight adaptation + evaluation |
+| Hallucinations Lab | `hallucinations.py` | Why hallucinations happen and how to block them |
+| LangChain Orchestration | `langchain_orchestration.py` | Explicit multi-step pipelines |
+| MCP Tools Lab | `mcp_tax_tools.py` | Tool-based deterministic execution |
+| Full RAG | `full_rag_chroma.py` | Retrieval + re-rank + citations |
+| Prompt Caching | `prompt_caching.py` | Latency reduction via caching |
+
+---
+
+## 🧠 App 1 — Hugging Face Fine-Tuning (Supervised)
+
+**File:** `applications/finetuning.py`
+
+### What It Is
+Supervised fine-tuning continues training a pretrained model on a task-specific dataset, updating model weights by minimizing cross-entropy loss.
+
+### Intended Goal
+Generate **logistics email subject lines** from short instructions.
+
+### What This App Shows
+- True BEFORE vs AFTER comparison  
+- Validation loss and early stopping  
+- Holdout benchmark (not trained on)  
+- Metrics: Exact Match, Token-level F1  
+- Saved artifacts under `artifacts/finetuning/<timestamp>/`
+
+### Key Lesson
+Fine-tuning:
+- improves task alignment
+- does NOT inject new factual knowledge
+- overfits easily with small datasets
+
+This app demonstrates what fine-tuning **can and cannot** do.
+
+---
+
+## 🧠 App 2 — Hallucinations Lab (Prompting + Grounding)
+
+**File:** `applications/hallucinations.py`
+
+### What It Is
+LLMs are probabilistic next-token predictors, not truth engines.  
+Without grounding, they hallucinate confidently.
+
+### What This App Demonstrates
+- Baseline hallucinations (free-form prompting)
+- Why JSON and refusal help structure, not truth
+- Why **context-only grounding** blocks hallucinations
+- A transparent **RAG-lite** system using TF-IDF retrieval
+
+### Key Lesson
+Hallucinations are a **system design problem**, not a model bug.
+
+---
+
+## 🧠 App 3 — LangChain Orchestration (Multi-Step Pipelines)
+
+**File:** `applications/langchain_orchestration.py`
+
+### What It Is
+Explicit orchestration breaks a task into **visible, debuggable steps**.
+
+### Pipeline Demonstrated
+1. Classification  
+2. Clarifying questions  
+3. Checklist and required documents  
+4. Optional structured email draft  
+
+Each step:
+- runs independently
+- consumes prior outputs
+- is visible in the UI
+
+### Key Lesson
+Orchestration provides control, traceability, and debuggability — essential for real systems.
+
+---
+
+## 🧠 App 4 — MCP Tools Lab (Tool-Based Systems)
+
+**File:** `applications/mcp_tax_tools.py`
+
+### What It Is
+Tool-based systems move LLMs from free-text generation to **deterministic execution**.
+
+### Tools Demonstrated
+- classify_tax_case  
+- build_prep_checklist  
+- draft_tax_email  
+
+### UI Shows
+- live logs
+- progress indicators
+- each tool call with inputs and outputs
+
+### Key Lesson
+Tools turn LLMs from text generators into **auditable systems**.
+
+---
+
+## 🧠 App 5 — Full RAG (ChromaDB + Re-Rank + Citations)
+
+**File:** `applications/full_rag_chroma.py`
+
+### What It Is
+A full Retrieval-Augmented Generation pipeline:
+1. Chunk documents
+2. Embed and store in ChromaDB
+3. Retrieve Top-K candidates
+4. Re-rank for higher evidence quality
+5. Generate answers with **strict JSON citations and quoted evidence**
+
+### Why Re-Ranking
+Vector retrieval is approximate.  
+Re-ranking improves precision by scoring question–chunk relevance more accurately.
+
+### Strict Output Format
+Answers must include:
+- answer
+- supported_by_context flag
+- citations
+- quoted evidence
+
+If evidence is insufficient, the model must return `UNKNOWN`.
+
+### Key Lesson
+Correctness comes from **retrieval + evidence enforcement**, not model size.
+
+---
+
+## 🧠 App 6 — Prompt Caching (Latency & Systems Optimization)
+
+**File:** `applications/prompt_caching.py`
+
+### What It Is
+Prompt caching stores previous prompt-response pairs to avoid repeated model execution.
+
+### What This App Demonstrates
+- Latency before caching
+- Latency after caching
+- Cache hits vs misses
+- Deterministic outputs reused instantly
+
+### Key Lesson
+Many LLM system gains come from **systems optimization**, not better models.
 
 ---
 
@@ -87,258 +241,8 @@ source llms-venv/bin/activate
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 
-Important: Prefer python -m streamlit to ensure Streamlit runs inside the active venv.
 
-⸻
-
-🧠 App 1 — Hugging Face Fine-Tuning (Supervised)
-
-📄 File: applications/finetuning.py
-
-What it is
-
-Supervised fine-tuning continues training a pretrained model on a small task dataset to shift its behavior toward your domain.
-
-Mathematically, you minimize cross-entropy over tokens:
-[
-\mathcal{L} = -\sum_{t} \log p_\theta(x_t \mid x_{<t})
-]
-You’re updating weights (\theta), not just changing the prompt.
-
-Intended goal
-
-Teach a model to generate logistics email subject lines from instructions.
-
-Advantages
-	•	✅ Improves task formatting and domain style (tone, structure, key terms)
-	•	✅ Demonstrates training dynamics (overfitting vs generalization)
-	•	✅ Shows the difference between “model behavior” vs “prompt tricks”
-
-What this app shows
-	•	TRUE Before vs After (fresh base model vs fine-tuned model)
-	•	Train & validation loss curves
-	•	Early stopping (prevents overfitting/repetition)
-	•	Holdout benchmark (examples not seen during training)
-	•	Simple metrics:
-	•	Exact Match
-	•	Token-level F1
-	•	Artifacts saved under:
-	•	artifacts/finetuning/<timestamp>/
-
-Example
-
-Instruction
-	•	Write an email subject for a shipment delayed due to weather. Mention the new ETA is tomorrow.
-
-Expected outcome after fine-tuning
-	•	“Weather Delay: Updated ETA — Delivery Tomorrow”
-
-Note: This app performs full fine-tuning, not LoRA/QLoRA.
-
-⸻
-
-🧠 App 2 — Hallucinations Lab (Prompting + Grounding)
-
-📄 File: applications/hallucinations.py
-
-What it is
-
-Hallucinations happen because LLMs are probabilistic next-token predictors, not truth engines.
-Without grounding, the model tries to produce a plausible continuation even when it lacks facts.
-
-Intended goal
-
-Show:
-	1.	how hallucinations appear in baseline prompting
-	2.	why formatting constraints help structure but not truth
-	3.	why grounding (context-only) blocks hallucinations
-	4.	how a “RAG-lite” pattern improves reliability
-
-Advantages
-	•	✅ Makes hallucination behavior visible and testable
-	•	✅ Teaches refusal behavior (UNKNOWN) as a safety mechanism
-	•	✅ Demonstrates grounding rules (“only answer if supported”)
-
-Modes included (what to learn)
-	•	Baseline (free-form): fluent + confident + wrong is common
-	•	JSON-only: better structure, still wrong if model lacks knowledge
-	•	Refusal policy: allows the model to say UNKNOWN
-	•	Self-consistency: improves stability, not factuality
-	•	Context-only: enforces truth by limiting allowed information
-
-Example tests
-
-Baseline hallucination test
-
-Ask:
-	•	“What year did Isaac Newton invent the smartphone?”
-
-Expected:
-	•	A confident fabricated answer (hallucination).
-
-Context-only correctness test
-
-Put into context:
-	•	“Australia’s capital city is Canberra.”
-
-Ask:
-	•	“What is the capital of Australia?”
-
-Expected:
-	•	JSON answer supported by context + evidence.
-
-⸻
-
-🧠 App 3 — LangChain Orchestration (Multi-Step Pipeline)
-
-📄 File: applications/langchain_orchestration.py
-
-What it is
-
-Orchestration decomposes a task into explicit steps. Each step has:
-	•	a purpose,
-	•	inputs,
-	•	outputs,
-	•	and can be debugged independently.
-
-This mirrors how enterprise systems avoid “one huge prompt that does everything”.
-
-Intended goal
-
-Create a tax-prep assistant pipeline that breaks work into steps:
-	1.	classify the case
-	2.	generate clarifying questions
-	3.	produce checklist + required documents
-	4.	optionally draft a structured email
-
-Advantages
-	•	✅ Traceability: you can see what each step produced
-	•	✅ Debuggability: identify which step caused failure
-	•	✅ Control: enforce constraints per-step (JSON, refusal, etc.)
-
-Example
-
-Input:
-	•	“I’m filing taxes in Germany; I need a checklist and what to clarify with a tax advisor.”
-
-Expected:
-	•	Classification (category)
-	•	3–7 clarifying questions
-	•	Checklist of documents
-	•	Optional email draft to advisor
-
-⸻
-
-🧠 App 4 — MCP Tax Tools (Tool-Based Execution)
-
-📄 File: applications/mcp_tax_tools.py
-
-What it is
-
-Tool-based systems turn LLM workflows into auditable function calls:
-	•	each tool has typed inputs/outputs,
-	•	deterministic logic,
-	•	and logs of what happened.
-
-This resembles the core idea behind tool protocols (MCP-style patterns).
-
-Intended goal
-
-Demonstrate how an assistant can call tools like:
-	1.	classify_tax_case
-	2.	build_prep_checklist
-	3.	draft_tax_email
-
-Advantages
-	•	✅ Deterministic outputs for key steps
-	•	✅ Auditable logs + intermediate states
-	•	✅ Reduced hallucination by limiting “free-form invention”
-
-Example
-
-Input:
-	•	“I need checklist + questions before filing.”
-
-Expected:
-	•	tool call logs shown in UI
-	•	checklist + questions generated as structured outputs
-	•	email draft assembled using tool outputs
-
-⸻
-
-🧠 App 5 — Full RAG (ChromaDB + HF) with Re-Rank + Strict Citations
-
-📄 File: applications/full_rag_chroma.py
-
-What it is
-
-Retrieval-Augmented Generation (RAG) is a system design pattern:
-	•	retrieve relevant text from a knowledge base,
-	•	inject it into the prompt,
-	•	and force the model to answer from evidence.
-
-Core idea (mathematically)
-
-We want:
-[
-p(y \mid x) \approx \sum_{d \in \mathcal{D}} p(y \mid x, d),p(d \mid x)
-]
-Where:
-	•	(x) = question
-	•	(d) = retrieved document chunk
-	•	(p(d \mid x)) = retriever relevance score
-	•	(p(y \mid x, d)) = generator conditioned on retrieved evidence
-
-Intended goal
-
-Build a local, inspectable full RAG pipeline:
-	1.	Chunk documents
-	2.	Embed chunks
-	3.	Store/query in ChromaDB
-	4.	Retrieve Top-N candidates
-	5.	Re-rank candidates for better evidence
-	6.	Generate an answer with strict JSON citations + quoted evidence
-
-Why re-ranking is added
-
-Vector retrieval is fast but approximate. It can return “kind of related” chunks.
-
-Re-ranking uses a stronger model that scores:
-	•	(question, chunk)
-
-This improves retrieval quality, especially when multiple candidates look similar.
-
-Strict answer + citations JSON (why it matters)
-
-This app enforces a JSON contract:
-	•	answer
-	•	supported_by_context
-	•	citations (source + chunk id)
-	•	quoted_evidence (short direct quotes)
-
-If evidence is insufficient, the model must answer:
-	•	UNKNOWN
-
-This turns RAG into an auditable system instead of “trust me bro”.
-
-Advantages
-	•	✅ Retrieval-based correctness (when KB is correct)
-	•	✅ Evidence-first answers
-	•	✅ Stronger retrieval quality via re-rank
-	•	✅ Debuggable: you can inspect retrieved chunks and scores
-
-Example
-
-Knowledge base includes australia.txt:
-	•	“Australia’s national government is based in Canberra…”
-
-Ask:
-	•	“What is the capital of Australia?”
-
-Expected:
-	•	JSON answer: Canberra
-	•	citations show australia.txt chunk id
-	•	quoted evidence contains the supporting line
+Always use python -m streamlit to ensure the correct environment.
 
 ⸻
 
@@ -346,25 +250,24 @@ Expected:
 
 Planned additions:
 	•	LoRA / QLoRA fine-tuning
-	•	Embedding-based RAG variants + vector DB comparisons
+	•	Embedding comparisons
 	•	LangGraph workflows
 	•	MCP protocol integrations
 	•	Multi-agent coordination
+	•	Classical ML & AI systems
 
 ⸻
 
-🧠 Portfolio Note (Recruiter-Friendly)
+🧠 Final Takeaway
 
-This repo demonstrates practical LLM systems skills:
-	•	training discipline (eval, overfitting control)
-	•	hallucination mitigation via grounding
-	•	retrieval + re-ranking + citations
-	•	orchestration (step-by-step pipelines)
-	•	tool-based execution and logging
+This repository is not about making LLMs sound smart.
 
-If you’re hiring for AI/LLM roles, this repo reflects how I design systems:
-inspectable, auditable, and resilient.
+It is about understanding:
+	•	why they fail
+	•	how systems constrain them
+	•	how engineers make them reliable
 
-⭐ If this repo helped you learn something — consider starring it.
-💬 If you’re hiring — feel free to reach out.
+That is the difference between demos and production.
 
+⭐ If this repo helped you learn something — star it.
+💬 If you’re hiring — this repo reflects how I think about AI systems.
