@@ -235,39 +235,46 @@ Many LLM system gains come from **systems optimization**, not better models.
 
 ## ▶️ Running the Lab
 
-```bash
+Create and activate a virtual environment:
+
 python -m venv llms-venv
 source llms-venv/bin/activate
+
+Install dependencies:
+
 python -m pip install -r requirements.txt
+
+Run the Streamlit launcher:
+
 python -m streamlit run app.py
 
+Always use `python -m streamlit` to ensure Streamlit runs inside the correct virtual environment.
 
-Always use python -m streamlit to ensure the correct environment.
+---
 
-⸻
-
-🚀 Roadmap
+## 🚀 Roadmap
 
 Planned additions:
-	•	LoRA / QLoRA fine-tuning
-	•	Embedding comparisons
-	•	LangGraph workflows
-	•	MCP protocol integrations
-	•	Multi-agent coordination
-	•	Classical ML & AI systems
 
-⸻
+- LoRA / QLoRA fine-tuning
+- Embedding model comparisons
+- LangGraph workflows
+- MCP protocol integrations
+- Multi-agent coordination
+- Classical ML & AI systems (trees, sparse regression, neural networks)
 
-🧠 Final Takeaway
+---
+
+## 🧠 Final Takeaway
 
 This repository is not about making LLMs sound smart.
 
 It is about understanding:
-	•	why they fail
-	•	how systems constrain them
-	•	how engineers make them reliable
+- why they fail
+- how systems constrain them
+- how engineers make them reliable
 
-That is the difference between demos and production.
+That is the difference between demos and production systems.
 
-⭐ If this repo helped you learn something — star it.
-💬 If you’re hiring — this repo reflects how I think about AI systems.
+⭐ If this repo helped you learn something — consider starring it.
+💬 If you’re hiring — this repository reflects how I think about real-world AI systems.
