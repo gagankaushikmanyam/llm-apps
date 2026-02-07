@@ -1,5 +1,3 @@
-
-⸻
 Author: Gagan Kaushik Manyam  
 ---
 
