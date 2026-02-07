@@ -1,23 +1,58 @@
 
-Author: Gagan Kaushik Manyam
+⸻
+Author: Gagan Kaushik Manyam  
 ---
-# 🧪 LLM Lab
 
-**LLM Lab** is a modular, Streamlit-based experimentation environment for exploring core  
-**Large Language Model (LLM) techniques** — starting with **supervised fine-tuning** and extending toward  
-**hallucination mitigation, RAG-lite grounding, LoRA/QLoRA, and agent-style systems**.
+# 🧪 LLM Lab — A Systems-First Playground for Modern LLM Engineering
 
-This repository is intentionally designed as a **research and learning lab**, not a production system.
+**LLM Lab** is a modular, Streamlit-based experimentation environment for learning and demonstrating  
+**how real-world LLM systems are designed, debugged, and extended** — beyond prompts and demos.
+
+This repository focuses on **system behavior**, not model hype.
+
+It covers:
+- supervised fine-tuning
+- hallucination mitigation
+- RAG-lite grounding
+- multi-step orchestration
+- tool-based (MCP-style) execution
+
+All examples are:
+- **CPU-friendly**
+- **fully inspectable**
+- **explicit about failure modes**
+
+This is a **learning + research lab**, not a production framework.
+
+---
+
+## 👤 Who This Repository Is For
+
+This repo is designed for:
+
+- **Aspiring AI / LLM Engineers** entering industry roles  
+- **Software / ML Engineers** transitioning into LLM systems  
+- **Researchers** who want to understand *why* LLMs fail or succeed  
+- **Recruiters & hiring managers** evaluating practical system design skills  
+
+If you want to understand:
+- why hallucinations happen,
+- why prompting is not enough,
+- how orchestration actually works,
+- how tools change LLM behavior,
+
+this repo is for you.
 
 ---
 
 ## ✨ Design Principles
 
-- 🔍 **Clear, inspectable implementations**
+- 🔍 **Inspectability over magic**
 - 🧠 **Concept-first demos** (why things work or fail)
-- 💻 **CPU-friendly by default**, optional GPU acceleration
-- 🎯 **Reproducibility** (explicit seed control)
-- 🧩 **Plugin-style architecture** for adding new experiments
+- 💻 **CPU-first**, GPU optional
+- 🎯 **Reproducibility** (explicit seeds)
+- 🧩 **Plugin-style architecture**
+- 🚫 No hidden datasets, no black boxes
 
 ---
 
@@ -25,19 +60,15 @@ This repository is intentionally designed as a **research and learning lab**, no
 
 The lab is structured around a **single Streamlit launcher**:
 
-```
 app.py
-```
 
-The launcher dynamically discovers and loads applications from:
+Applications are auto-discovered from:
 
-```
 applications/
-```
 
-### 🔌 Application Interface Contract
+### 🔌 Application Contract
 
-Each application **must expose**:
+Every app must expose:
 
 ```python
 APP_NAME = "Human-readable name"
@@ -45,331 +76,270 @@ APP_DESCRIPTION = "Optional description"
 
 def run() -> None:
     ...
-```
 
-➡️ New apps are added by simply dropping a file into `applications/`  
-➡️ **No core launcher changes are required**
+➡️ Drop a new file into applications/
+➡️ Restart Streamlit
+➡️ No launcher changes required
 
-This keeps the lab scalable, clean, and easy to extend.
+This keeps the system scalable and clean.
 
----
+⸻
 
-# 🧠 App 1 — Hugging Face Fine-tuning Demo
+🧠 App 1 — Hugging Face Fine-tuning (Supervised)
 
-📄 **File:** `applications/finetuning.py`
+📄 File: applications/finetuning.py
 
-This app demonstrates **end-to-end supervised fine-tuning** of a causal language model using  
-the **Hugging Face Transformers** ecosystem.
+Demonstrates end-to-end supervised fine-tuning of a causal language model using
+Hugging Face Transformers.
 
-The UI directly compares **pretrained vs fine-tuned behavior**.
+⸻
 
----
+🎯 Task
 
-## 🎯 Task
+Logistics email subject line generation from short instructions.
 
-**Logistics email subject line generation** from short natural-language instructions.
-
-Example:
-
-```
 Instruction: Write an email subject for a shipment delayed due to weather.
 Subject: Weather Delay: Updated ETA for Shipment (Arrives Tomorrow)
-```
 
----
 
-## 📊 Data
+⸻
 
-- Small **in-repo toy dataset**
-- Defined in: `utils/io.py`
-- Format:  
-  **instruction → subject**
-- Intentionally small to keep training **fast and inspectable**
+📊 What This App Shows
+	•	TRUE before vs after comparison
+	•	Validation loss + early stopping
+	•	Holdout benchmark (not seen during training)
+	•	Simple metrics:
+	•	Exact Match
+	•	Token-level F1
+	•	Saved artifacts:
 
-> This dataset is for **learning and experimentation**, not production use.
+artifacts/finetuning/<timestamp>/
 
----
 
-## 🤖 Model
 
-- **Default:** `sshleifer/tiny-gpt2`
-  - Extremely small
-  - CPU-friendly
-- **Optional:** `distilgpt2`
-  - Better quality
-  - Slower on CPU
+⸻
 
-All models are loaded via **Hugging Face Transformers**.
+🤖 Models
+	•	sshleifer/tiny-gpt2 — ultra-fast, educational
+	•	distilgpt2 — higher quality, still CPU-friendly
 
----
+⚠️ This app performs full fine-tuning, not LoRA / QLoRA
+(LoRA/QLoRA are planned extensions.)
 
-## ⚙️ Training & Evaluation
+⸻
 
-- Examples are formatted as:
-  ```
-  Instruction: ...
-  Subject: ...
-  ```
-- Tokenization + training use the **causal LM objective**
-- Training handled via **Hugging Face Trainer**
-- UI displays:
-  - Loss per epoch
-  - Training time
-- Fine-tuned artifacts saved under:
-  ```
-  artifacts/finetuning/<timestamp>/
-  ```
+🧠 Key Lesson
 
----
+Fine-tuning:
+	•	improves task alignment
+	•	does NOT inject knowledge
+	•	overfits easily with small data
 
-## ✅ Expected Outcome
+This app shows what fine-tuning can and cannot do.
 
-- “After” outputs become **more task-aligned** than “Before”
-- With very small datasets:
-  - Too many epochs can cause **overfitting**
-  - Mitigated using:
-    - Greedy / beam decoding
-    - Repetition penalties
+⸻
 
-This app demonstrates **what fine-tuning can and cannot do**.
+🧠 App 2 — Hallucinations Lab (Prompting + RAG-lite)
 
----
+📄 File: applications/hallucinations.py
 
-# 🧠 App 2 — Hallucinations Lab (Prompting + RAG-lite)
+Demonstrates why hallucinations happen and why
+grounding with context is the only reliable mitigation.
 
-📄 **File:** `applications/hallucinations.py`
+⸻
 
-This app demonstrates:
+🔴 Baseline (Free-form)
+	•	No structure
+	•	No refusal
+	•	No grounding
 
-- Why hallucinations happen
-- Why prompting alone is insufficient
-- Why **grounding with retrieved context** is the only reliable mitigation strategy
+Ask:
 
-The goal is **not** to make a small model “know facts”, but to show  
-**how systems enforce correctness even when models are unreliable**.
+What year did Isaac Newton invent the smartphone?
 
----
+You’ll get:
+	•	fluent
+	•	confident
+	•	fabricated answers
 
-## ❌ Why Hallucinations Happen (Baseline)
+This is default LLM behavior.
 
-LLMs are **probabilistic text generators**, not truth engines.
+⸻
 
-Without constraints, they will:
-- Produce fluent answers
-- Sound confident
-- Hallucinate when uncertain
+⚠️ Prompting Alone Is Not Enough
 
----
+JSON-only, refusal, self-consistency:
+	•	improve format
+	•	improve stability
+	•	do NOT guarantee truth
 
-## 🔴 Baseline Mode (Free-form)
+Prompting reduces chaos — not hallucinations.
 
-### Technique
-- No structure
-- No refusal
-- No grounding
+⸻
 
-### Expected Behavior
-- Model **always answers**
-- Often **confidently wrong**
-- No way to verify correctness
+🟢 Context-Only Answering (RAG-lite)
 
-### How to Test
-1. Select **Technique → Baseline (free-form)**
-2. Ask:
-   ```
-   What year did Isaac Newton invent the smartphone?
-   ```
-3. Observe:
-   - A confident but fabricated answer
+The model:
+	•	may ONLY use retrieved context
+	•	must say UNKNOWN if unsupported
 
-This demonstrates the **default hallucination behavior** of LLMs.
+This is a minimal RAG system.
 
----
+⸻
 
-## ⚠️ Why Prompting Alone Is Not Enough
+📚 Knowledge Base (Explicit & Local)
 
-### JSON-only / Refusal / Self-consistency Modes
-
-These techniques improve **output control**, not truth.
-
-They help with:
-- Structured outputs
-- Safer responses (`UNKNOWN`)
-- Stability across generations
-
-They **do not guarantee correctness** unless the model already knows the answer.
-
-> **Key insight:**  
-> Prompting reduces chaos — **not hallucinations**.
-
----
-
-## 🟢 Context-Only Answering (Grounded Mode)
-
-This is the **core hallucination mitigation strategy** in the lab.
-
-### What “Context-Only” Means
-
-- The model is **forbidden** from using internal knowledge
-- It may answer **only using retrieved text**
-- If unsupported → it **must return `UNKNOWN`**
-
-This is a **RAG-lite system**.
-
----
-
-## 📚 Knowledge Base (Local & Explicit)
-
-You must create a local knowledge base manually.
-
-### Folder Structure
-```
 knowledge_base/
   australia.txt
   logistics_faq.txt
-  ...
-```
 
-### Example (`australia.txt`)
-```
-Australia's national government is based in Canberra, home to Parliament House.
+Example:
+
+Australia's national government is based in Canberra.
 Sydney is the largest city by population.
-```
 
-There is **no hidden dataset and no magic**.
+No hidden data. No magic.
 
-This is intentional:
-- You control the facts
-- You inspect exactly what the model sees
-- Failure cases are explicit and honest
+⸻
 
----
+🔎 Retrieval
+	•	TF-IDF (scikit-learn)
+	•	Chunking + similarity ranking
+	•	Top-K chunks injected into prompt
 
-## 🔎 How Retrieval Works (RAG-lite)
+Why scikit-learn?
+	•	Transparent
+	•	CPU-friendly
+	•	No vector DB required
 
-1. Documents are split into chunks
-2. **TF-IDF (scikit-learn)** ranks chunks by similarity to the question
-3. Top-K chunks are retrieved
-4. The model may **only answer using those chunks**
+⸻
 
-### Why scikit-learn?
-- Lightweight local retrieval
-- No embeddings
-- No vector databases
-- CPU-friendly and transparent
+🧠 Key Lesson
 
----
+Hallucinations are a system design problem, not a model bug.
 
-## 🧪 How to Test Context-Only Correctness
+⸻
 
-### ✅ Correct Answer Case
-1. Technique → **Context-only (RAG-lite grounded)**
-2. Question:
-   ```
-   What is the capital of Australia?
-   ```
-3. Ensure `australia.txt` contains the answer
-4. Expected:
-   - `answer: Canberra`
-   - `supported_by_context: true`
-   - Evidence quoted from document
+🧠 App 3 — LangChain Orchestration (Multi-Step Reasoning)
 
----
+📄 File: applications/langchain_orchestration.py
 
-### 🚫 Forced UNKNOWN Case
-1. Ask:
-   ```
-   Who is the president of Australia?
-   ```
-2. If not in the documents:
-   - `answer: UNKNOWN`
-   - `supported_by_context: false`
+Demonstrates explicit multi-step orchestration using LangChain.
 
-This verifies hallucinations are **blocked, not hidden**.
+⸻
 
----
+🔁 Pipeline
+	1.	Classification
+	2.	Clarifying questions
+	3.	Checklist + required documents
+	4.	Optional email draft
 
-## 💡 Why Context-Only Feels “Obvious”
+Each step:
+	•	runs independently
+	•	consumes prior output
+	•	is visible in the UI
 
-You might think:
+⸻
 
-> “We already put the answer in the context.”
+🧠 Key Lesson
 
-That is **exactly the point**.
+Orchestration provides:
+	•	control
+	•	traceability
+	•	debuggability
 
-In real systems, context comes from:
-- Databases
-- Documents
-- APIs
-- Logs
-- Contracts
-- Internal knowledge bases
+This mirrors real enterprise LLM workflows.
 
-The model’s job is **not to invent**, but to:
-- Read
-- Extract
-- Cite
-- Refuse when unsupported
+⸻
 
----
+🧠 App 4 — MCP Tools Lab (Tool-Based Systems)
 
-## 📌 Summary — What Each Mode Teaches
+📄 File: applications/mcp_tax_tools.py
 
-| Mode | What it Demonstrates |
-|----|----|
-| Baseline | Confident hallucinations |
-| JSON-only | Structure without truth |
-| Refusal | Safer uncertainty |
-| Self-consistency | Stability, not correctness |
-| Context-only (RAG-lite) | **Actual hallucination prevention** |
+Demonstrates tool-based LLM systems inspired by
+the Model Context Protocol (MCP).
 
----
+⸻
 
-## 🧠 Key Takeaway
+🧰 Tools Implemented
+	1.	classify_tax_case
+	2.	build_prep_checklist
+	3.	draft_tax_email
 
-Hallucinations are **not a model bug**.  
-They are a **system design problem**.
+Each tool is:
+	•	deterministic
+	•	typed
+	•	auditable
 
-This lab shows:
-- Prompting helps formatting
-- Retrieval provides truth
-- Grounding enforces correctness
+⸻
 
-Once this is understood, extending to:
-- Full RAG
-- Vector databases
-- Citations
-- Tool-augmented agents  
-becomes straightforward.
+📊 UI Shows
+	•	live logs
+	•	progress bar
+	•	each tool call (inputs + outputs)
+	•	final composed result
 
----
+⸻
 
-## ▶️ Running the Lab
+🧠 Key Lesson
 
-```bash
+Tools turn LLMs from:
+
+“text generators”
+into
+inspectable systems
+
+⸻
+
+🧩 How Everything Fits Together
+
+App	What It Teaches
+Fine-tuning	Weight adaptation
+Hallucinations	Why grounding is required
+Orchestration	Structured reasoning
+MCP Tools	Controlled execution
+
+Together, they demonstrate modern LLM system design.
+
+⸻
+
+▶️ Running the Lab
+
 python -m venv llms-venv
 source llms-venv/bin/activate
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
-```
 
-⚠️ Always use `python -m streamlit` to ensure the correct environment is used.
+⚠️ Always use python -m streamlit to ensure the correct environment.
 
----
+⸻
 
-## ➕ Extending the Lab
+🚀 Roadmap
 
-To add a new application:
+Planned additions:
+	•	LoRA / QLoRA fine-tuning
+	•	Full RAG with embeddings
+	•	LangGraph workflows
+	•	MCP protocol integrations
+	•	Multi-agent coordination
+	•	ML & AI classics (trees, sparse regression, neural nets)
 
-1. Create `applications/<new_app>.py`
-2. Define `APP_NAME` and `run()`
-3. Restart Streamlit
+⸻
 
-### Suggested Next Apps
-- `applications/lora.py`
-- `applications/qlora.py`
-- `applications/rag.py`
-- `applications/mcp.py`
-```
+🧠 Final Takeaway
+
+This repository is not about making LLMs sound smart.
+
+It is about understanding:
+	•	why they fail
+	•	how systems constrain them
+	•	how engineers make them reliable
+
+That is the difference between demos and production.
+
+⸻
+
+⭐ If this repo helped you learn something — star it.
+💬 If you’re hiring — this repo reflects how I think about AI systems.
 
 ---
