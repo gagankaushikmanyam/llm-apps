@@ -17,10 +17,10 @@ The lab covers:
 - prompt caching and latency behavior
 
 All examples are:
-- CPU-friendly by default
-- fully inspectable
-- explicit about failure modes
-- reproducible (seeded)
+- CPU-friendly by default  
+- fully inspectable  
+- explicit about failure modes  
+- reproducible (seeded)  
 
 This is a **learning + research lab**, not a production framework.
 
@@ -58,7 +58,7 @@ this repository is for you.
 
 ## 🏗 Architecture Overview
 
-The lab is driven by a single Streamlit launcher:
+The lab is driven by a **single Streamlit launcher**:
 
 - `app.py`
 
@@ -83,14 +83,14 @@ To add a new app:
 
 ## 📌 Quick Summary of Applications
 
-| App | File | What It Demonstrates |
+| App | File | Core Idea |
 |---|---|---|
 | Fine-tuning | `finetuning.py` | Weight adaptation + evaluation |
-| Hallucinations Lab | `hallucinations.py` | Why hallucinations happen and how to block them |
+| Hallucinations Lab | `hallucinations.py` | Why hallucinations happen & how to block them |
 | LangChain Orchestration | `langchain_orchestration.py` | Explicit multi-step pipelines |
-| MCP Tools Lab | `mcp_tax_tools.py` | Tool-based deterministic execution |
+| MCP Tools Lab | `mcp_tax_tools.py` | Deterministic tool-based execution |
 | Full RAG | `full_rag_chroma.py` | Retrieval + re-rank + citations |
-| Prompt Caching | `prompt_caching.py` | Latency reduction via caching |
+| Prompt Caching | `prompt_caching.py` | Latency optimization |
 
 ---
 
@@ -99,25 +99,19 @@ To add a new app:
 **File:** `applications/finetuning.py`
 
 ### What It Is
-Supervised fine-tuning continues training a pretrained model on a task-specific dataset, updating model weights by minimizing cross-entropy loss.
+Supervised fine-tuning continues training a pretrained model on a task-specific dataset by minimizing **cross-entropy loss**.
+
+Mathematically:
+- The model updates weights θ to minimize  
+  `L = − Σ log P(y | x; θ)`
 
 ### Intended Goal
 Generate **logistics email subject lines** from short instructions.
 
-### What This App Shows
-- True BEFORE vs AFTER comparison  
-- Validation loss and early stopping  
-- Holdout benchmark (not trained on)  
-- Metrics: Exact Match, Token-level F1  
-- Saved artifacts under `artifacts/finetuning/<timestamp>/`
-
-### Key Lesson
-Fine-tuning:
-- improves task alignment
-- does NOT inject new factual knowledge
-- overfits easily with small datasets
-
-This app demonstrates what fine-tuning **can and cannot** do.
+### Key Lessons
+- Fine-tuning improves *task alignment*
+- It does **not** inject new knowledge
+- Small datasets overfit quickly
 
 ---
 
@@ -126,13 +120,17 @@ This app demonstrates what fine-tuning **can and cannot** do.
 **File:** `applications/hallucinations.py`
 
 ### What It Is
-LLMs are probabilistic next-token predictors, not truth engines.  
-Without grounding, they hallucinate confidently.
+LLMs model **P(next_token | context)** — not truth.
+
+Without grounding:
+- They always answer
+- They sound confident
+- They hallucinate
 
 ### What This App Demonstrates
-- Baseline hallucinations (free-form prompting)
-- Why JSON and refusal help structure, not truth
-- Why **context-only grounding** blocks hallucinations
+- Baseline hallucinations
+- Why JSON / refusal help *format*, not *truth*
+- Why **context-only answering** blocks hallucinations
 - A transparent **RAG-lite** system using TF-IDF retrieval
 
 ### Key Lesson
@@ -145,21 +143,21 @@ Hallucinations are a **system design problem**, not a model bug.
 **File:** `applications/langchain_orchestration.py`
 
 ### What It Is
-Explicit orchestration breaks a task into **visible, debuggable steps**.
+Complex tasks are decomposed into **explicit, inspectable steps**.
 
-### Pipeline Demonstrated
+### Pipeline
 1. Classification  
 2. Clarifying questions  
-3. Checklist and required documents  
-4. Optional structured email draft  
+3. Checklist + required documents  
+4. Structured email draft  
 
 Each step:
 - runs independently
-- consumes prior outputs
+- consumes prior output
 - is visible in the UI
 
 ### Key Lesson
-Orchestration provides control, traceability, and debuggability — essential for real systems.
+Orchestration gives **control, traceability, and debuggability**.
 
 ---
 
@@ -168,17 +166,28 @@ Orchestration provides control, traceability, and debuggability — essential fo
 **File:** `applications/mcp_tax_tools.py`
 
 ### What It Is
-Tool-based systems move LLMs from free-text generation to **deterministic execution**.
+This app demonstrates **Model Context Protocol (MCP)-style tools** executed locally.
 
-### Tools Demonstrated
-- classify_tax_case  
-- build_prep_checklist  
-- draft_tax_email  
+### How MCP Tools Are Built Here
 
-### UI Shows
-- live logs
-- progress indicators
-- each tool call with inputs and outputs
+Each tool:
+- has a stable name
+- takes explicit inputs
+- returns structured outputs
+- performs one deterministic task
+- has no hidden state
+
+Example tools:
+- `classify_tax_case`
+- `build_prep_checklist`
+- `draft_tax_email`
+
+A local **ToolRegistry** acts as an MCP runtime:
+- dispatches tools
+- logs inputs/outputs
+- records timing
+
+> The tools are MCP-compliant **by contract**, even without a running MCP server.
 
 ### Key Lesson
 Tools turn LLMs from text generators into **auditable systems**.
@@ -190,46 +199,55 @@ Tools turn LLMs from text generators into **auditable systems**.
 **File:** `applications/full_rag_chroma.py`
 
 ### What It Is
-A full Retrieval-Augmented Generation pipeline:
-1. Chunk documents
-2. Embed and store in ChromaDB
-3. Retrieve Top-K candidates
-4. Re-rank for higher evidence quality
-5. Generate answers with **strict JSON citations and quoted evidence**
+A complete Retrieval-Augmented Generation system:
+
+1. Documents are chunked  
+2. Chunks are embedded and stored in **ChromaDB**  
+3. Query retrieves Top-N chunks via vector similarity  
+4. A **cross-encoder re-ranker** scores (Question, Chunk) pairs  
+5. The best evidence is passed to the generator  
+6. Output is forced into **strict JSON with citations**
+
+### Why ChromaDB
+- Persistent vector storage
+- Fast approximate nearest-neighbor search
+- Decouples retrieval from generation
 
 ### Why Re-Ranking
-Vector retrieval is approximate.  
-Re-ranking improves precision by scoring question–chunk relevance more accurately.
+Vector similarity is approximate.  
+Re-ranking computes a stronger relevance score:
 
-### Strict Output Format
+`relevance(Q, D) = CrossEncoder(Q ⊕ D)`
+
+This improves evidence quality.
+
+### Strict Output
 Answers must include:
 - answer
 - supported_by_context flag
 - citations
 - quoted evidence
 
-If evidence is insufficient, the model must return `UNKNOWN`.
-
-### Key Lesson
-Correctness comes from **retrieval + evidence enforcement**, not model size.
+If unsupported → return `UNKNOWN`.
 
 ---
 
-## 🧠 App 6 — Prompt Caching (Latency & Systems Optimization)
+## 🧠 App 6 — Prompt Caching (Latency Optimization)
 
 **File:** `applications/prompt_caching.py`
 
 ### What It Is
-Prompt caching stores previous prompt-response pairs to avoid repeated model execution.
+Prompt caching avoids recomputation by storing:
 
-### What This App Demonstrates
+`hash(prompt + config) → response`
+
+### What It Demonstrates
 - Latency before caching
 - Latency after caching
 - Cache hits vs misses
-- Deterministic outputs reused instantly
 
 ### Key Lesson
-Many LLM system gains come from **systems optimization**, not better models.
+Many LLM gains come from **systems engineering**, not larger models.
 
 ---
 
@@ -237,31 +255,50 @@ Many LLM system gains come from **systems optimization**, not better models.
 
 Create and activate a virtual environment:
 
-python -m venv llms-venv
-source llms-venv/bin/activate
+python -m venv llms-venv  
+source llms-venv/bin/activate  
 
 Install dependencies:
 
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt  
 
-Run the Streamlit launcher:
+Run the launcher:
 
-python -m streamlit run app.py
+python -m streamlit run app.py  
 
-Always use `python -m streamlit` to ensure Streamlit runs inside the correct virtual environment.
+Always use `python -m streamlit` to ensure the correct environment.
 
 ---
 
-## 🚀 Roadmap
+## 🤝 Contributing
 
-Planned additions:
+Contributions are welcome.
 
-- LoRA / QLoRA fine-tuning
-- Embedding model comparisons
-- LangGraph workflows
-- MCP protocol integrations
-- Multi-agent coordination
-- Classical ML & AI systems (trees, sparse regression, neural networks)
+- Keep implementations inspectable
+- Prefer clarity over cleverness
+- Add explanations when introducing new concepts
+
+See `CONTRIBUTING.md` for details.
+
+---
+
+## 🛡 Security
+
+This repository is for educational use.
+
+- No secrets should be committed
+- No production credentials required
+- Report issues responsibly via GitHub Security Advisories
+
+See `SECURITY.md`.
+
+---
+
+## 📜 Code of Conduct
+
+All contributors are expected to follow the Code of Conduct.
+
+See `CODE_OF_CONDUCT.md`.
 
 ---
 
@@ -276,5 +313,5 @@ It is about understanding:
 
 That is the difference between demos and production systems.
 
-⭐ If this repo helped you learn something — consider starring it.
+⭐ If this repo helped you learn something — consider starring it.  
 💬 If you’re hiring — this repository reflects how I think about real-world AI systems.

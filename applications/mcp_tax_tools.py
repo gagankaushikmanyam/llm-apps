@@ -1,43 +1,47 @@
 # FILE: applications/mcp_tax_tools.py
 """
-MCP Tools Lab (FastMCP + Hugging Face) — Tax Workflow
+MCP Tools Lab (FastMCP + Hugging Face) — Tax Workflow (Germany example)
 
 What this app demonstrates
 --------------------------
-- A tiny "tool server" built using FastMCP (if installed)
-- 3 tools (like an agent/toolbox would expose)
-- A Streamlit UI that clearly shows:
+A "tools-first" workflow that behaves like real MCP/agent systems:
+
+- Tools are deterministic and return typed/structured outputs (auditable).
+- LLM is OPTIONAL and used only to "polish" natural language (email).
+- Streamlit UI clearly shows:
   - logging
   - progress
   - intermediate tool calls (inputs/outputs + timing)
+  - stable final results
 
-Important note
---------------
-This app runs tools *locally* (in-process). You do NOT need the MCP CLI.
-If you later want an external MCP server, the tool definitions here are already MCP-shaped.
+Why your previous version produced weird output
+-----------------------------------------------
+1) Streamlit reruns the script, so local variables reset after the button click.
+   Fix: persist results in st.session_state.
+
+2) Asking a small model to follow strict "key=value" formatting is fragile.
+   Fix: tools create the structure deterministically; LLM can polish wording.
 
 Tools (3)
 ---------
-1) classify_tax_case: classify scenario into a category + risk
-2) build_prep_checklist: generate a prep checklist + documents list
-3) draft_tax_email: draft an email to a tax advisor using checklist + questions
-
-LLM usage
----------
-We use an instruction-tuned HF model (FLAN-T5) because it follows instructions better than GPT-2.
+1) classify_tax_case: rule-based classification + risk
+2) build_prep_checklist: deterministic checklist + documents by category
+3) draft_tax_email: template email using outputs (LLM polish optional)
 """
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import streamlit as st
 
-APP_NAME = "MCP (Tools): Model Context Protocol"
-APP_DESCRIPTION = "Demonstrates a 3-tool FastMCP-style workflow with clear logs, progress, and intermediate tool calls."
+APP_NAME = "MCP: Model Context Protocol"
+APP_DESCRIPTION = (
+    "3-tool FastMCP-style workflow (Taxes) with clear logs, progress, tool calls, "
+    "and deterministic structured outputs (LLM used only for optional polishing)."
+)
 
 
 # -----------------------------
@@ -59,14 +63,9 @@ def _require_deps() -> None:
 def _try_init_fastmcp() -> Tuple[bool, Optional[Any], str]:
     """
     Try to initialize FastMCP if installed.
-
-    The MCP Python package/API can vary by version, so:
-    - We treat FastMCP as OPTIONAL.
-    - We still run tools locally via a simple registry.
+    Optional: the UI still works without it.
     """
     try:
-        # Common pattern in MCP Python SDKs:
-        # from mcp.server.fastmcp import FastMCP
         from mcp.server.fastmcp import FastMCP  # type: ignore
 
         mcp = FastMCP("tax-tools")
@@ -86,24 +85,43 @@ def _device_label() -> str:
 
 
 # -----------------------------
-# HF pipeline
+# Streamlit session state helpers (CRITICAL)
+# -----------------------------
+def _ss_init() -> None:
+    st.session_state.setdefault("mcp_logs", [])
+    st.session_state.setdefault("mcp_calls", [])
+    st.session_state.setdefault("last_classification", {})
+    st.session_state.setdefault("last_checklist", {})
+    st.session_state.setdefault("last_email", {})
+    st.session_state.setdefault("last_intake", "")
+
+
+def _log(msg: str) -> None:
+    ts = time.strftime("%H:%M:%S")
+    st.session_state["mcp_logs"].append(f"[{ts}] {msg}")
+
+
+# -----------------------------
+# HF pipeline (optional polish)
 # -----------------------------
 @st.cache_resource(show_spinner=False)
 def _build_hf_pipe(model_name: str):
+    """
+    Use a deterministic seq2seq generator.
+    Avoid device_map="auto" for beginner stability; explicitly select device.
+    """
     from transformers import pipeline
+    import torch
 
-    # FLAN-T5 is text2text-generation; stable for instruction prompts.
+    device = 0 if torch.cuda.is_available() else -1
     return pipeline(
         task="text2text-generation",
         model=model_name,
-        device_map="auto",  # uses GPU if present
+        device=device,
     )
 
 
 def _hf_invoke(pipe, prompt: str, *, max_new_tokens: int, num_beams: int) -> str:
-    """
-    Deterministic invocation to reduce randomness and improve repeatability.
-    """
     outputs = pipe(
         prompt,
         max_new_tokens=max_new_tokens,
@@ -132,27 +150,12 @@ class ToolCall:
     seconds: float
 
 
-def _ss_logs() -> List[str]:
-    if "mcp_logs" not in st.session_state:
-        st.session_state["mcp_logs"] = []
-    return st.session_state["mcp_logs"]
-
-
-def _ss_calls() -> List[ToolCall]:
-    if "mcp_calls" not in st.session_state:
-        st.session_state["mcp_calls"] = []
-    return st.session_state["mcp_calls"]
-
-
-def _log(msg: str) -> None:
-    ts = time.strftime("%H:%M:%S")
-    _ss_logs().append(f"[{ts}] {msg}")
-
-
 def _trace_tool_call(
     name: str, inp: Dict[str, Any], out: Dict[str, Any], seconds: float
 ) -> None:
-    _ss_calls().append(ToolCall(tool_name=name, input=inp, output=out, seconds=seconds))
+    st.session_state["mcp_calls"].append(
+        ToolCall(tool_name=name, input=inp, output=out, seconds=seconds)
+    )
 
 
 # -----------------------------
@@ -162,16 +165,11 @@ ToolFn = Callable[..., Dict[str, Any]]
 
 
 class ToolRegistry:
-    """Minimal tool registry. We use this to execute tools deterministically in-process."""
-
     def __init__(self) -> None:
         self._tools: Dict[str, ToolFn] = {}
 
     def register(self, name: str, fn: ToolFn) -> None:
         self._tools[name] = fn
-
-    def names(self) -> List[str]:
-        return sorted(self._tools.keys())
 
     def call(self, name: str, **kwargs: Any) -> Dict[str, Any]:
         if name not in self._tools:
@@ -180,104 +178,207 @@ class ToolRegistry:
 
 
 # -----------------------------
-# The 3 MCP-style tools (tax)
+# Tool 1: deterministic classification (NO LLM)
 # -----------------------------
-def _tool_classify_tax_case(
-    *, pipe, intake: str, max_new_tokens: int, num_beams: int
-) -> Dict[str, Any]:
+CATEGORIES = [
+    "employment_only",
+    "mixed_income",
+    "self_employed",
+    "investments_interest",
+    "relocation_remote_work",
+    "deductions_focus",
+    "other",
+]
+
+
+def _tool_classify_tax_case(*, intake: str) -> Dict[str, Any]:
     """
-    Tool 1: classify a tax scenario into a category + risk level.
-    Returns structured dict (not model JSON).
+    Deterministic rule-based classification.
+    This is what "tools" should look like: fast, stable, auditable.
     """
-    prompt = f"""
-You are a tax workflow triage assistant.
+    t = intake.lower()
 
-Return EXACTLY 3 lines:
-category=<employment_only|mixed_income|self_employed|crypto|foreign_income|real_estate|student|other>
-risk=<low|medium|high>
-rationale=<one short sentence>
+    has_salary = "salary" in t or "full-time" in t or "employer" in t
+    has_freelance = "freelance" in t or "self-employed" in t or "invoice" in t
+    has_interest = "interest" in t or "dividend" in t or "capital" in t or "invest" in t
+    has_move = "moved" in t or "relocat" in t or "new city" in t
+    has_remote = "remote" in t or "home office" in t
+    has_deductions = (
+        "deduction" in t or "commute" in t or "training" in t or "equipment" in t
+    )
 
-Do NOT copy the input text.
-Scenario:
-{intake}
+    # Category
+    if has_salary and not has_freelance and not has_interest:
+        category = "employment_only"
+    elif has_salary and has_freelance:
+        category = "mixed_income"
+    elif has_freelance and not has_salary:
+        category = "self_employed"
+    elif has_interest and not has_freelance and has_salary:
+        category = "investments_interest"
+    elif has_move or has_remote:
+        category = "relocation_remote_work"
+    elif has_deductions:
+        category = "deductions_focus"
+    else:
+        category = "other"
 
-Output:
-""".strip()
+    # Risk heuristic
+    risk = "low"
+    if category in {"mixed_income", "self_employed"}:
+        risk = "medium"
+    if "foreign" in t or "crypto" in t or "rental" in t or "real estate" in t:
+        risk = "high"
 
-    raw = _hf_invoke(pipe, prompt, max_new_tokens=max_new_tokens, num_beams=num_beams)
+    rationale = {
+        "employment_only": "Primarily wage income; standard filing with typical documents.",
+        "mixed_income": "Salary plus freelance income needs separation of income/expenses (EUR).",
+        "self_employed": "Self-employed income requires careful bookkeeping and potentially VAT considerations.",
+        "investments_interest": "Investment income/interest statements required; check withholding/tax certificates.",
+        "relocation_remote_work": "Move/remote work introduces allocation questions and additional documentation.",
+        "deductions_focus": "Focus is deductions; strong receipt/document discipline improves outcomes.",
+        "other": "Scenario unclear or mixed; requires clarifying questions to categorize properly.",
+    }[category]
 
-    parsed: Dict[str, str] = {}
-    for line in raw.splitlines():
-        if "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        parsed[k.strip().lower()] = v.strip()
+    return {"category": category, "risk": risk, "rationale": rationale}
 
-    return {
-        "category": parsed.get("category", "other"),
-        "risk": parsed.get("risk", "medium"),
-        "rationale": parsed.get("rationale", raw.strip()[:200]),
-        "raw": raw,
-    }
+
+# -----------------------------
+# Tool 2: deterministic checklist/documents (NO LLM)
+# -----------------------------
+CHECKLIST_BY_CATEGORY: Dict[str, Dict[str, Any]] = {
+    "employment_only": {
+        "steps": [
+            "Collect Lohnsteuerbescheinigung (wage tax certificate) from employer(s).",
+            "Compile deduction receipts: commute, work equipment, training, home office (if applicable).",
+            "Confirm health insurance, pension, and other payroll-related statements (if needed).",
+        ],
+        "documents": [
+            "Lohnsteuerbescheinigung (2025)",
+            "Commute records (tickets, distance, office days)",
+            "Receipts for work equipment (laptop, chair, etc.)",
+            "Training invoices/certificates",
+        ],
+        "next_action": "Verify which deductions are eligible and whether you need Anlage N only.",
+    },
+    "mixed_income": {
+        "steps": [
+            "Separate employment vs freelance income clearly (timeline + amounts).",
+            "Prepare simple income/expense summary for freelance work (EUR).",
+            "Collect deduction receipts (commute, equipment, training, home office).",
+        ],
+        "documents": [
+            "Lohnsteuerbescheinigung (2025)",
+            "Freelance invoices issued",
+            "Freelance expense receipts (software, equipment, travel, etc.)",
+            "Bank statements (to reconcile payments)",
+            "Training invoices/certificates",
+        ],
+        "next_action": "Clarify whether freelance qualifies for Kleinunternehmer (VAT) and which forms apply.",
+    },
+    "investments_interest": {
+        "steps": [
+            "Collect annual tax certificates from banks/brokers (Jahressteuerbescheinigung).",
+            "Check if any capital gains require additional reporting (especially foreign brokers).",
+            "Confirm Freistellungsauftrag/withholding and whether to reclaim overwithheld taxes.",
+        ],
+        "documents": [
+            "Jahressteuerbescheinigung (bank/broker)",
+            "Broker statements (gains/losses)",
+            "Foreign account statements (if any)",
+        ],
+        "next_action": "Confirm whether any investment income was foreign-sourced and needs special reporting.",
+    },
+    "relocation_remote_work": {
+        "steps": [
+            "Document move date(s) and addresses; collect registration confirmations if available.",
+            "Track remote work vs office days (important for deductions).",
+            "Gather receipts for moving-related costs if deductible in your situation.",
+        ],
+        "documents": [
+            "Move confirmation / registration (Anmeldung) if available",
+            "Lease contracts (old/new) or proof of residence change",
+            "Remote work log (months/days)",
+            "Commute records (tickets, distance)",
+        ],
+        "next_action": "Clarify deduction rules for home office and whether move expenses are deductible for you.",
+    },
+    "deductions_focus": {
+        "steps": [
+            "Organize all receipts by category (commute, equipment, training, home office).",
+            "Write short notes for each expense: purpose + date + amount.",
+            "Summarize totals per category to speed filing or advisor review.",
+        ],
+        "documents": [
+            "Receipts for equipment/training",
+            "Commute documentation",
+            "Home office documentation (if applicable)",
+        ],
+        "next_action": "Confirm which deduction categories apply to your employment status and tax year.",
+    },
+    "self_employed": {
+        "steps": [
+            "Prepare complete income/expense summary (EUR) with supporting documentation.",
+            "Check VAT status (Kleinunternehmer vs VAT filings).",
+            "Collect all invoices, contracts, and proof of payment.",
+        ],
+        "documents": [
+            "Issued invoices",
+            "Expense receipts",
+            "Bank statements",
+            "Contracts with clients",
+        ],
+        "next_action": "Clarify VAT obligations and which annexes/forms apply for self-employment.",
+    },
+    "other": {
+        "steps": [
+            "List all income sources and amounts (salary, freelance, capital, rental, etc.).",
+            "Identify any special events (move, foreign income, marriage, etc.).",
+            "Collect all available documents first; then clarify missing items with an advisor.",
+        ],
+        "documents": [
+            "Any wage tax certificate(s) if employed",
+            "Bank/broker annual statements if applicable",
+            "Freelance invoices/receipts if applicable",
+        ],
+        "next_action": "Answer the clarifying questions below to categorize the case correctly.",
+    },
+}
 
 
 def _tool_build_prep_checklist(
-    *,
-    pipe,
-    intake: str,
-    classification: Dict[str, Any],
-    max_new_tokens: int,
-    num_beams: int,
+    *, intake: str, classification: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """
-    Tool 2: Build a prep checklist + documents list, based on the intake + classification.
-    """
-    cat = classification.get("category", "other")
-    risk = classification.get("risk", "medium")
+    cat = str(classification.get("category", "other"))
+    if cat not in CHECKLIST_BY_CATEGORY:
+        cat = "other"
 
-    prompt = f"""
-You are a tax workflow assistant.
+    base = CHECKLIST_BY_CATEGORY[cat]
+    steps = list(base["steps"])
+    docs = list(base["documents"])
+    next_action = str(base["next_action"])
 
-Return EXACTLY these lines:
-step1=<short step>
-step2=<short step>
-step3=<short step>
-doc1=<document name>
-doc2=<document name>
-doc3=<document name>
-next_action=<one sentence>
-
-Tailor to category={cat}, risk={risk}.
-Do NOT copy the input.
-
-Scenario:
-{intake}
-
-Output:
-""".strip()
-
-    raw = _hf_invoke(pipe, prompt, max_new_tokens=max_new_tokens, num_beams=num_beams)
-
-    parsed: Dict[str, str] = {}
-    for line in raw.splitlines():
-        if "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        parsed[k.strip().lower()] = v.strip()
-
-    steps = [parsed.get("step1", ""), parsed.get("step2", ""), parsed.get("step3", "")]
-    docs = [parsed.get("doc1", ""), parsed.get("doc2", ""), parsed.get("doc3", "")]
-    steps = [s for s in steps if s.strip()]
-    docs = [d for d in docs if d.strip()]
+    # Add scenario-specific items (cheap heuristics)
+    t = intake.lower()
+    if "training" in t and "training invoices" not in " ".join(docs).lower():
+        docs.append("Training invoices/certificates (Fortbildungskosten)")
+    if "equipment" in t and "equipment" not in " ".join(docs).lower():
+        docs.append("Receipts for work equipment (Arbeitsmittel)")
+    if "commute" in t and "commute" not in " ".join(docs).lower():
+        docs.append("Commute documentation (Entfernungspauschale evidence)")
+    if "interest" in t and "jahressteuerbescheinigung" not in " ".join(docs).lower():
+        docs.append("Bank interest statement / Jahressteuerbescheinigung")
 
     return {
         "steps": steps,
         "documents": docs,
-        "next_action": parsed.get("next_action", ""),
-        "raw": raw,
+        "next_action": next_action,
     }
 
 
+# -----------------------------
+# Tool 3: email drafting (template-first; optional LLM polish)
+# -----------------------------
 def _tool_draft_tax_email(
     *,
     pipe,
@@ -285,45 +386,88 @@ def _tool_draft_tax_email(
     checklist: Dict[str, Any],
     max_new_tokens: int,
     num_beams: int,
+    polish_with_llm: bool,
 ) -> Dict[str, Any]:
-    """
-    Tool 3: Draft a professional email to a tax advisor using the checklist artifacts.
-    """
-    steps = checklist.get("steps", [])
-    docs = checklist.get("documents", [])
-    next_action = checklist.get("next_action", "")
+    steps: List[str] = checklist.get("steps", []) or []
+    docs: List[str] = checklist.get("documents", []) or []
+    next_action: str = checklist.get("next_action", "") or ""
 
-    steps_txt = "\n".join([f"- {s}" for s in steps]) if steps else "- (none)"
-    docs_txt = "\n".join([f"- {d}" for d in docs]) if docs else "- (none)"
+    clarifying_questions = [
+        "Do I need to file an EUR or any additional annexes (e.g., Anlage S/G/KAP) given my situation?",
+        "Which expenses in my list are most relevant/eligible for deductions for my employment status and tax year?",
+        "Are there any special rules I should consider due to relocation/remote work during the year?",
+    ]
 
+    subject = "Request for tax filing checklist and clarification (Germany, 2025)"
+    email_template = f"""Subject: {subject}
+
+Hello [Gagan's Imaginary Tax Advisor],
+
+I’m preparing my 2025 tax filing in Germany and would like to confirm what I should gather and clarify before filing.
+
+Summary:
+- {intake.replace(chr(10), chr(10)+'- ')}
+
+Documents I can provide:
+{chr(10).join([f"- {d}" for d in docs]) if docs else "- (none yet)"}
+
+What I plan to do next:
+{chr(10).join([f"- {s}" for s in steps]) if steps else "- (none yet)"}
+
+3 clarifying questions:
+{chr(10).join([f"{i+1}) {q}" for i, q in enumerate(clarifying_questions)])}
+
+Next step request:
+Could you confirm if anything is missing and advise which forms/annexes apply? If possible, I’d appreciate a short call or a written checklist.
+
+Best regards,
+Gagan Kaushik Manyam
+"""
+
+    if not polish_with_llm:
+        return {"email": email_template, "raw": email_template}
+
+    # Optional LLM polish (safe because structure already exists)
     prompt = f"""
-Write a concise professional email to a tax advisor. No fluff.
+Polish this email for clarity and professionalism.
+Keep the same structure and sections.
+Do not remove bullet lists.
+Do not add new facts.
+Return ONLY the improved email text.
 
-Required sections (in order):
-1) Subject line
-2) Short summary (2-3 lines)
-3) Documents I can provide (bullets)
-4) 3 clarifying questions I should ask
-5) Next step request
-
-Scenario:
-{intake}
-
-Checklist steps:
-{steps_txt}
-
-Documents:
-{docs_txt}
-
-Suggested next action:
-{next_action}
-
-Email:
+EMAIL:
+{email_template}
 """.strip()
 
-    raw = _hf_invoke(pipe, prompt, max_new_tokens=max_new_tokens, num_beams=num_beams)
+    refined = _hf_invoke(
+        pipe, prompt, max_new_tokens=max_new_tokens, num_beams=num_beams
+    ).strip()
 
-    return {"email": raw, "raw": raw}
+    def _looks_like_full_email(s: str) -> bool:
+        s_low = s.lower()
+        required_markers = [
+            "subject:",
+            "summary:",
+            "documents i can provide",
+            "clarifying questions",
+            "next step",
+            "best regards",
+        ]
+        if len(s) < 250:  # too short to be a real email
+            return False
+        hits = sum(1 for m in required_markers if m in s_low)
+        return hits >= 3  # allow some variation, but must include several sections
+
+    if not refined or not _looks_like_full_email(refined):
+        # Model collapsed (e.g., returned only "2025 tax filing checklist")
+        # Use safe deterministic template so the system stays reliable.
+        return {
+            "email": email_template,
+            "raw": refined,
+            "note": "LLM polish collapsed; fell back to deterministic template.",
+        }
+
+    return {"email": refined, "raw": refined}
 
 
 # -----------------------------
@@ -331,6 +475,7 @@ Email:
 # -----------------------------
 def run() -> None:
     _require_deps()
+    _ss_init()
 
     st.set_page_config(page_title="MCP Tools Lab", page_icon="🧰", layout="wide")
     st.markdown("## 🧰 MCP Tools Lab — FastMCP + Hugging Face (Taxes)")
@@ -338,31 +483,34 @@ def run() -> None:
         "Goal: show tools, logging, progress, and intermediate tool calls clearly."
     )
     st.info(
-        "This app executes tools locally (in-process). FastMCP is detected if installed, "
-        "but you do not need the MCP CLI to run this UI."
+        "Tools run locally (in-process). FastMCP is optional. "
+        "Outputs are deterministic + auditable; LLM is used only to optionally polish the email."
     )
 
-    # Init tool infra
     fastmcp_ok, mcp_obj, mcp_note = _try_init_fastmcp()
     st.caption(mcp_note)
 
     # Sidebar controls
     st.sidebar.header("Runtime Controls")
     model_name = st.sidebar.selectbox(
-        "HF model",
+        "HF model (email polish only)",
         options=["google/flan-t5-base", "google/flan-t5-small"],
         index=0,
-        help="Use flan-t5-base for stronger instruction following.",
+        help="Used only to polish email wording. Tools 1 & 2 are deterministic.",
     )
-    max_new_tokens = int(st.sidebar.slider("Max new tokens", 128, 512, 256, 32))
-    num_beams = int(st.sidebar.slider("Beams", 1, 8, 4, 1))
-
+    max_new_tokens = int(st.sidebar.slider("Max new tokens (polish)", 64, 512, 256, 32))
+    num_beams = int(st.sidebar.slider("Beams (polish)", 1, 8, 4, 1))
+    polish_with_llm = st.sidebar.checkbox(
+        "Polish email with LLM",
+        value=True,
+        help="If off, email is pure template (fastest + most stable).",
+    )
     st.sidebar.markdown("---")
     st.sidebar.caption(f"Device: {_device_label()}")
 
-    pipe = _build_hf_pipe(model_name)
+    pipe = _build_hf_pipe(model_name) if polish_with_llm else None
 
-    # Intake
+    # Intake UI
     st.markdown("### 1) Scenario Intake")
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -407,46 +555,40 @@ def run() -> None:
         f"Goal: {goal}"
     )
 
+    st.session_state["last_intake"] = intake
+
     with st.expander("Formatted intake (what tools receive)"):
         st.code(intake, language="text")
 
-    # Tool registry (always used for execution)
+    # Tool registry
     registry = ToolRegistry()
+    registry.register("classify_tax_case", lambda **kw: _tool_classify_tax_case(**kw))
     registry.register(
-        "classify_tax_case", lambda **kw: _tool_classify_tax_case(pipe=pipe, **kw)
+        "build_prep_checklist", lambda **kw: _tool_build_prep_checklist(**kw)
     )
     registry.register(
-        "build_prep_checklist", lambda **kw: _tool_build_prep_checklist(pipe=pipe, **kw)
-    )
-    registry.register(
-        "draft_tax_email", lambda **kw: _tool_draft_tax_email(pipe=pipe, **kw)
+        "draft_tax_email",
+        lambda **kw: (
+            _tool_draft_tax_email(pipe=pipe, **kw)
+            if pipe is not None
+            else _tool_draft_tax_email(pipe=None, **kw)
+        ),
     )
 
-    # If FastMCP is available, register tools there too (for future external server use)
-    # We keep this best-effort + optional.
+    # Optional FastMCP registration (best effort)
     if fastmcp_ok and mcp_obj is not None:
         try:
-            # The FastMCP decorator API may vary by version; best-effort only.
-            # If your MCP package supports it, these tools become server-exposable.
+
             @mcp_obj.tool()
             def classify_tax_case(intake: str) -> Dict[str, Any]:
-                return _tool_classify_tax_case(
-                    pipe=pipe,
-                    intake=intake,
-                    max_new_tokens=max_new_tokens,
-                    num_beams=num_beams,
-                )
+                return _tool_classify_tax_case(intake=intake)
 
             @mcp_obj.tool()
             def build_prep_checklist(
                 intake: str, classification: Dict[str, Any]
             ) -> Dict[str, Any]:
                 return _tool_build_prep_checklist(
-                    pipe=pipe,
-                    intake=intake,
-                    classification=classification,
-                    max_new_tokens=max_new_tokens,
-                    num_beams=num_beams,
+                    intake=intake, classification=classification
                 )
 
             @mcp_obj.tool()
@@ -459,10 +601,10 @@ def run() -> None:
                     checklist=checklist,
                     max_new_tokens=max_new_tokens,
                     num_beams=num_beams,
+                    polish_with_llm=polish_with_llm,
                 )
 
         except Exception:
-            # Don't block UI if MCP registration differs in your version.
             pass
 
     st.markdown("---")
@@ -473,17 +615,15 @@ def run() -> None:
             "🚀 Run 3-tool workflow", type="primary", use_container_width=True
         )
     with col_reset:
-        if st.button("Reset logs + calls", use_container_width=True):
+        if st.button("Reset logs + calls + results", use_container_width=True):
             st.session_state["mcp_logs"] = []
             st.session_state["mcp_calls"] = []
+            st.session_state["last_classification"] = {}
+            st.session_state["last_checklist"] = {}
+            st.session_state["last_email"] = {}
             st.experimental_rerun()
 
     progress = st.progress(0)
-
-    # Output containers
-    out_classification: Dict[str, Any] = {}
-    out_checklist: Dict[str, Any] = {}
-    out_email: Dict[str, Any] = {}
 
     if run_btn:
         _log("Starting workflow…")
@@ -492,34 +632,22 @@ def run() -> None:
         # Tool 1
         _log("Calling tool: classify_tax_case")
         t0 = time.perf_counter()
-        inp1 = {
-            "intake": intake,
-            "max_new_tokens": max_new_tokens,
-            "num_beams": num_beams,
-        }
+        inp1 = {"intake": intake}
         out1 = registry.call("classify_tax_case", **inp1)
         dt = time.perf_counter() - t0
         _trace_tool_call("classify_tax_case", inp1, out1, dt)
-        out_classification = out1
+        st.session_state["last_classification"] = out1
         _log(f"Tool finished: classify_tax_case ({dt:.2f}s)")
         progress.progress(35)
 
         # Tool 2
         _log("Calling tool: build_prep_checklist")
         t0 = time.perf_counter()
-        inp2 = {
-            "intake": intake,
-            "classification": {
-                "category": out1.get("category"),
-                "risk": out1.get("risk"),
-            },
-            "max_new_tokens": max_new_tokens,
-            "num_beams": num_beams,
-        }
+        inp2 = {"intake": intake, "classification": out1}
         out2 = registry.call("build_prep_checklist", **inp2)
         dt = time.perf_counter() - t0
         _trace_tool_call("build_prep_checklist", inp2, out2, dt)
-        out_checklist = out2
+        st.session_state["last_checklist"] = out2
         _log(f"Tool finished: build_prep_checklist ({dt:.2f}s)")
         progress.progress(70)
 
@@ -531,22 +659,26 @@ def run() -> None:
             "checklist": out2,
             "max_new_tokens": max_new_tokens,
             "num_beams": num_beams,
+            "polish_with_llm": polish_with_llm,
         }
-        out3 = registry.call("draft_tax_email", **inp3)
+        out3 = _tool_draft_tax_email(
+            pipe=pipe, **inp3
+        )  # call directly (pipe may be None)
         dt = time.perf_counter() - t0
         _trace_tool_call("draft_tax_email", inp3, out3, dt)
-        out_email = out3
+        st.session_state["last_email"] = out3
         _log(f"Tool finished: draft_tax_email ({dt:.2f}s)")
         progress.progress(100)
+
         _log("Workflow completed ✅")
 
-    # Display area
+    # Display
     st.markdown("---")
     tabs = st.tabs(["Intermediate Tool Calls", "Logs", "Results"])
 
     with tabs[0]:
         st.markdown("### Intermediate Tool Calls (inputs → outputs)")
-        calls = _ss_calls()
+        calls: List[ToolCall] = st.session_state["mcp_calls"]
         if not calls:
             st.caption("Run the workflow to see intermediate tool calls here.")
         else:
@@ -571,43 +703,31 @@ def run() -> None:
 
     with tabs[1]:
         st.markdown("### Live Logs")
-        logs = _ss_logs()
+        logs: List[str] = st.session_state["mcp_logs"]
         if not logs:
             st.caption("No logs yet.")
         else:
             st.code("\n".join(logs), language="text")
 
     with tabs[2]:
-        st.markdown("### Results")
+        st.markdown("### Results (persist across reruns ✅)")
+        out_classification = st.session_state["last_classification"]
+        out_checklist = st.session_state["last_checklist"]
+        out_email = st.session_state["last_email"]
+
         if out_classification:
             st.markdown("#### 1) Classification")
-            st.json(
-                {
-                    "category": out_classification.get("category"),
-                    "risk": out_classification.get("risk"),
-                    "rationale": out_classification.get("rationale"),
-                }
-            )
-            with st.expander("Raw model output (classification)"):
-                st.code(out_classification.get("raw", ""), language="text")
+            st.json(out_classification)
 
         if out_checklist:
             st.markdown("#### 2) Checklist + Documents")
-            st.json(
-                {
-                    "steps": out_checklist.get("steps", []),
-                    "documents": out_checklist.get("documents", []),
-                    "next_action": out_checklist.get("next_action", ""),
-                }
-            )
-            with st.expander("Raw model output (checklist)"):
-                st.code(out_checklist.get("raw", ""), language="text")
+            st.json(out_checklist)
 
         if out_email:
             st.markdown("#### 3) Email Draft")
-            email = out_email.get("email", "") or ""
-            st.text_area("Email", value=email.strip(), height=280)
-            if not email.strip():
+            email = (out_email.get("email", "") or "").strip()
+            st.text_area("Email", value=email, height=320)
+            if not email:
                 st.warning(
-                    "Email is empty. Increase max_new_tokens or use flan-t5-base."
+                    "Email is empty. Turn off polish or increase max_new_tokens and use flan-t5-base."
                 )

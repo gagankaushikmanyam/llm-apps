@@ -13,3 +13,4 @@ mcp
 chromadb
 sentence-transformers
 pypdf
+langextract

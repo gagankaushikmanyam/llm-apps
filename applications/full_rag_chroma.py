@@ -318,38 +318,45 @@ def _load_generator(model_name: str):
     return pipeline("text2text-generation", model=model_name, device=device)
 
 
-def _build_strict_json_prompt(
-    *,
-    question: str,
-    retrieved: List[RetrievedChunk],
-) -> str:
-    """
-    Force a strict JSON output with citations + quoted evidence.
-
-    Model must output EXACTLY one JSON object. No markdown. No extra text.
-    """
+def _build_strict_json_prompt(*, question: str, retrieved: List[RetrievedChunk]) -> str:
     ctx_lines: List[str] = []
     for i, r in enumerate(retrieved, start=1):
         ctx_lines.append(f"[{i}] SOURCE={r.source} CHUNK={r.chunk_id}\n{r.text}")
     context = "\n\n".join(ctx_lines).strip()
 
+    # Keep schema minimal. Large schemas cause models to “drift”.
     schema = {
-        "answer": "string (or 'UNKNOWN' if not supported)",
+        "answer": "string (or 'UNKNOWN')",
         "supported_by_context": "boolean",
         "citations": [{"source": "string", "chunk_id": "string"}],
         "quoted_evidence": [
             {"source": "string", "chunk_id": "string", "quote": "string"}
         ],
-        "notes": "string (optional; keep short)",
+    }
+
+    example = {
+        "answer": "Canberra",
+        "supported_by_context": True,
+        "citations": [{"source": "australia.txt", "chunk_id": "0"}],
+        "quoted_evidence": [
+            {
+                "source": "australia.txt",
+                "chunk_id": "0",
+                "quote": "…government is based in Canberra…",
+            }
+        ],
     }
 
     return (
-        "You are a grounded assistant.\n"
-        "You MUST answer using ONLY the provided context.\n"
-        "If the answer is not clearly supported by the context, you MUST answer 'UNKNOWN'.\n"
-        "Return ONLY a single valid JSON object. No markdown. No extra text.\n"
-        "Keys must match the schema exactly.\n\n"
-        f"JSON schema:\n{json.dumps(schema, indent=2)}\n\n"
+        "You are a strict JSON generator.\n"
+        "Rules:\n"
+        "1) Use ONLY the context. If unsupported, answer = 'UNKNOWN'.\n"
+        "2) Output EXACTLY ONE JSON object.\n"
+        "3) Output must be ONE LINE.\n"
+        "4) Use double quotes for all JSON strings.\n"
+        "5) No markdown. No explanations. No extra text.\n\n"
+        f"Schema:\n{json.dumps(schema, indent=2)}\n\n"
+        f"Example format (copy this style):\n{json.dumps(example)}\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {question}\n"
         "JSON:"
@@ -361,22 +368,32 @@ def _generate_text(gen, prompt: str, max_new_tokens: int) -> str:
         prompt,
         max_new_tokens=max_new_tokens,
         do_sample=False,
-        num_beams=4,
+        num_beams=1,  # ✅ greedy is more JSON-stable than beam search
+        early_stopping=True,
     )
     return str(out[0].get("generated_text", "")).strip()
 
 
 def _try_parse_json(text: str) -> Tuple[Optional[Dict], str]:
-    """
-    Parse JSON from model output. If the model includes extra text, attempt substring extraction.
-    """
     t = text.strip()
-    if t.startswith("{") and t.endswith("}"):
-        try:
-            return json.loads(t), ""
-        except Exception as exc:
-            return None, f"JSON parse failed: {exc}"
 
+    # Remove common code fences
+    if t.startswith("```"):
+        t = t.strip("`").strip()
+        if t.lower().startswith("json"):
+            t = t[4:].strip()
+
+    # First: try direct parse
+    if t.startswith("{"):
+        end = t.rfind("}")
+        if end != -1:
+            candidate = t[: end + 1]
+            try:
+                return json.loads(candidate), ""
+            except Exception as exc:
+                return None, f"JSON parse failed: {exc}"
+
+    # Fallback: substring extraction
     start = t.find("{")
     end = t.rfind("}")
     if start == -1 or end == -1 or end <= start:
@@ -389,23 +406,24 @@ def _try_parse_json(text: str) -> Tuple[Optional[Dict], str]:
         return None, f"JSON parse failed: {exc}"
 
 
-def _honest_fallback_json(
-    *,
-    raw_output: str,
-    retrieved: List[RetrievedChunk],
-) -> Dict:
-    """
-    If the model refuses to output JSON, we do NOT hallucinate structure.
-    We return an 'honest' JSON wrapper so the UI stays usable.
-    """
+def _honest_fallback_json(*, raw_output: str, retrieved: List[RetrievedChunk]) -> Dict:
+    raw_ans = raw_output.strip()
+
+    # Heuristic: supported if answer text appears in any retrieved chunk
+    supported = False
+    if raw_ans:
+        raw_ans_norm = raw_ans.lower()
+        supported = any(raw_ans_norm in r.text.lower() for r in retrieved)
+
     citations = [{"source": r.source, "chunk_id": r.chunk_id} for r in retrieved]
     evidence = [
         {"source": r.source, "chunk_id": r.chunk_id, "quote": _quote_evidence(r.text)}
         for r in retrieved
     ]
+
     return {
-        "answer": raw_output.strip() or "",
-        "supported_by_context": False,
+        "answer": raw_ans,
+        "supported_by_context": bool(supported),
         "citations": citations,
         "quoted_evidence": evidence,
         "notes": "Model did not return valid JSON; this is a fallback wrapper.",
